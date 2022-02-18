@@ -1,0 +1,29 @@
+name: odcey
+base: core18
+adopt-info: odcey
+license: Apache-2.0
+summary: Text converter of ".odc"-format from BlackBox Component Builder
+description: |
+  Converter to plain text Oberon document binary format,
+  used by the BlackBox Component Builder.
+  Usable as text converter in .git for readable diffs of odc-documents.
+
+grade: stable
+confinement: strict
+
+parts:
+  odcey:
+    plugin: nil
+    override-build: |
+      snap install --edge --classic vostok
+      vostok to-bin odcey.Cli odcey -m . -cc "cc -O1 -flto -s"
+      snapcraftctl set-version `./odcey version`
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/bin
+      cp odcey $SNAPCRAFT_PART_INSTALL/usr/bin/
+
+    source:
+      .
+
+apps:
+  odcey:
+    command: usr/bin/odcey
