@@ -27,3 +27,5 @@ parts:
 apps:
   odcey:
     command: usr/bin/odcey
+    plugs:
+      - home
