@@ -54,26 +54,29 @@ BEGIN
   ELSE
     in := VDefaultIO.OpenIn()
   END;
-  ok := (in # NIL) & Odc.ReadDoc(in^, doc);
   IF in = NIL THEN
-    log.sn("Can not open input")
-  ELSIF ~ok THEN
-    log.sn("Error during parsing input as .odc")
+    log.sn("Can not open input");
+    ok := FALSE
   ELSE
-    IF output = "" THEN
-      out := VDefaultIO.OpenOut()
+    ok := Odc.ReadDoc(in^, doc);
+    Stream.CloseIn(in);
+    IF ~ok THEN
+      log.sn("Error during parsing input as .odc")
     ELSE
-      out := File.OpenOut(output)
-    END;
-    ok := (out # NIL) & Odc.PrintDoc(out^, doc);
-    IF out = NIL THEN
-      log.sn("Can not open output")
-    ELSIF ~ok THEN
-      log.sn("Error during printing to output")
+      IF output = "" THEN
+        out := VDefaultIO.OpenOut()
+      ELSE
+        out := File.OpenOut(output)
+      END;
+      ok := (out # NIL) & Odc.PrintDoc(out^, doc);
+      IF out = NIL THEN
+        log.sn("Can not open output")
+      ELSIF ~ok THEN
+        log.sn("Error during printing to output")
+      END;
+      Stream.CloseOut(out)
     END
-  END;
-  Stream.CloseIn(in);
-  Stream.CloseOut(out)
+  END
 RETURN
   ok
 END Text;
@@ -183,11 +186,11 @@ BEGIN
     arg2 := "";
     IF CLI.count > 1 THEN
       len := 0;
-      ASSERT(CLI.Get(arg, len, 0));
+      ASSERT(CLI.Get(arg, len, 1));
       IF CLI.count = 3 THEN
         len := 0;
-        ASSERT(CLI.Get(arg2, len, 0))
-      ELSE
+        ASSERT(CLI.Get(arg2, len, 2))
+      ELSIF CLI.count # 2 THEN
         ok := FALSE;
         log.sn("Too many arguments for text")
       END
