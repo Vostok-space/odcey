@@ -325,7 +325,8 @@ END ReadView;
 PROCEDURE ReadPieces(VAR in: Stream.In; p: PPiece): BOOLEAN;
 VAR ok: BOOLEAN; ofs, size: INTEGER; b: PBlock; viewId: BYTE;
 BEGIN
-  REPEAT
+  ok := TRUE;
+  WHILE (p # NIL) & ok DO
     b := p.block;
     size := p.size;
     IF size <= 0 THEN
@@ -346,8 +347,9 @@ BEGIN
         ok := ok & (size = Stream.ReadChars(in, b.data, 0, size))
       END
     END;
+    ASSERT(ok);
     p := p.next
-  UNTIL (p = NIL) OR ~ok
+  END
 RETURN
   ok
 END ReadPieces;
@@ -439,7 +441,7 @@ BEGIN
       & TextNew(txt, types)
 
       & Read.Skip(in, 6)
-      & Read.LeUinteger(in, metaSize) & (metaSize < rest)
+      & Read.LeUinteger(in, metaSize) & (metaSize <= rest)
 
       & ReadMeta(in, types, block, txt.pieces, metaSize, rest - metaSize)
       & ReadPieces(in, txt.pieces);
