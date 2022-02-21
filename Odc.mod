@@ -69,9 +69,13 @@ CONST
   CodeHyphen            = 2010H;
   CodeNonBreakingHyphen = 2011H;
 
+  SkipEmbeddedView* = 0;
+  LastOption*       = 0;
+
 TYPE
   Options* = RECORD
-    commanderReplacement*: ARRAY 64 OF CHAR
+    commanderReplacement*: ARRAY 64 OF CHAR;
+    set*: SET
   END;
 
   Types = RECORD
@@ -678,7 +682,7 @@ BEGIN
       THEN
         len := Chars0X.CalcLen(opt.commanderReplacement, 0);
         ok := len = Stream.WriteChars(out, opt.commanderReplacement, 0, len)
-      ELSIF ps.view # NIL THEN
+      ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN opt.set) THEN
         ok := writeObject(out, types, ps.view, opt)
       ELSE
         ok := 1 = Stream.WriteChars(out, " ", 0, 1)
@@ -712,10 +716,13 @@ END WriteObject;
 
 PROCEDURE DefaultOptions*(VAR opt: Options);
 BEGIN
-  opt.commanderReplacement := ""
+  opt.commanderReplacement := "";
+  opt.set := {}
 END DefaultOptions;
 
 PROCEDURE PrintDoc*(VAR out: Stream.Out; doc: Document; opt: Options): BOOLEAN;
+BEGIN
+  ASSERT(opt.set - {0 .. LastOption} = {})
 RETURN
   (doc.struct.object = NIL) OR WriteObject(out, doc.types, doc.struct.object, opt)
 END PrintDoc;

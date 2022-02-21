@@ -33,24 +33,26 @@ VAR
   options: Odc.Options;
 
 PROCEDURE Help(cli: BOOLEAN);
-VAR commanderTo: ARRAY 16 OF CHAR;
+VAR commanderTo, skipEmbedded: ARRAY 42 OF CHAR;
 BEGIN
   log.sn("odcey - converter of .odc to plain text");
   log.n;
   log.sn("Usage:");
   IF cli THEN
-    log.sn(" 0. odcey text       <input> <output> [-commander-to replacement]");
+    log.sn(" 0. odcey text       <input> <output> { options }");
     log.sn(" 1. odcey add-to-git <dir>");
-    commanderTo := "-commander-to"
+    commanderTo := "-commander-to <arg>";
+    skipEmbedded := "-skip-embedded-view"
   ELSE
     log.sn(" 0. odcey.text(input, output)");
-    log.sn("    odcey.commanderTo(replacement)");
     log.sn(" 1. odcey.addToGit(dir)");
-    commanderTo := "commanderTo"
+    commanderTo := "odcey.commanderTo(str)";
+    skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView})"
   END;
   log.n;
   log.sn("0. print text content of .odc, empty arguments for standard IO");
-  log.s("   "); log.s(commanderTo); log.sn(" allows in output replacing this view by the string");
+  log.s("   "); log.s(commanderTo); log.sn("  allows in output replacing this view by the argument");
+  log.s("   "); log.s(skipEmbedded); log.sn("  skips recursive writing of embedded views");
   log.sn("1. integrate to git repo as text converter")
 END Help;
 
@@ -167,6 +169,12 @@ BEGIN
   options.commanderReplacement := replacement
 END commanderTo;
 
+PROCEDURE opt*(set: SET);
+BEGIN
+  ASSERT(set - {0 .. Odc.LastOption} = {});
+  options.set := set
+END opt;
+
 PROCEDURE text*(input, output: ARRAY OF CHAR);
 VAR ignore: BOOLEAN;
 BEGIN
@@ -185,12 +193,13 @@ VAR
   len, i, argInd: INTEGER;
   ok: BOOLEAN;
 
-  PROCEDURE Option(VAR ind: INTEGER; par: ARRAY OF CHAR; VAR arg: ARRAY OF CHAR): BOOLEAN;
-  VAR ok: BOOLEAN; buf: ARRAY 16 OF CHAR; ofs: INTEGER;
+  PROCEDURE Option(VAR ind: INTEGER; par: ARRAY OF CHAR; VAR arg: ARRAY OF CHAR;
+                   VAR ok: BOOLEAN): BOOLEAN;
+  VAR match: BOOLEAN; buf: ARRAY 16 OF CHAR; ofs: INTEGER;
   BEGIN
-    ok := TRUE;
     ofs := 0;
-    WHILE ok & (ind < CLI.count) & CLI.Get(buf, ofs, ind) & (buf = par) DO
+    match := (ind < CLI.count) & CLI.Get(buf, ofs, ind) & (buf = par);
+    IF match THEN
       INC(ind);
       ofs := 0;
       ok := FALSE;
@@ -203,12 +212,30 @@ VAR
       ELSE
         INC(ind);
         ok := TRUE
-      END;
-      ofs := 0
+      END
     END
   RETURN
-    ok
+    match OR ~ok
   END Option;
+
+  PROCEDURE BoolOption(VAR ind: INTEGER; par: ARRAY OF CHAR; val: INTEGER; VAR set: SET;
+                       VAR ok: BOOLEAN): BOOLEAN;
+  VAR match: BOOLEAN; buf: ARRAY 24 OF CHAR; ofs: INTEGER;
+  BEGIN
+    ofs := 0;
+    match := (ind < CLI.count) & CLI.Get(buf, ofs, ind) & (buf = par);
+    IF ~match THEN
+      ;
+    ELSIF val IN set THEN
+      log.s("Dublicated parameter '"); log.s(par); log.sn("'");
+      ok := FALSE
+    ELSE
+      INC(ind);
+      INCL(set, val)
+    END
+  RETURN
+    match OR ~ok
+  END BoolOption;
 BEGIN
   ok := TRUE;
   len := 0;
@@ -225,9 +252,10 @@ BEGIN
     i := 1;
     argInd := 0;
     WHILE ok & (i < CLI.count) DO
-      ok := Option(i, "-commander-to", options.commanderReplacement)
-          & ((i = CLI.count) OR (argInd < LEN(args)));
-      IF ok & (i < CLI.count) THEN
+      IF ~Option(i, "-commander-to", options.commanderReplacement, ok)
+       & ~BoolOption(i, "-skip-embedded-view", Odc.SkipEmbeddedView, options.set, ok)
+       & (argInd < LEN(args))
+      THEN
         len := 0;
         ASSERT(CLI.Get(args[argInd], len, i));
         INC(i);
