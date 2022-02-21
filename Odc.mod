@@ -134,6 +134,7 @@ VAR
   readStruct: PROCEDURE(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
                         VAR next, size: INTEGER; rest: INTEGER;
                         VAR struct: Struct): BOOLEAN;
+  writeObject: PROCEDURE(VAR out: Stream.Out; types: Types; obj: PObject; opt: Options): BOOLEAN;
 
 PROCEDURE TypesInit(VAR t: Types);
 BEGIN
@@ -677,6 +678,8 @@ BEGIN
       THEN
         len := Chars0X.CalcLen(opt.commanderReplacement, 0);
         ok := len = Stream.WriteChars(out, opt.commanderReplacement, 0, len)
+      ELSIF ps.view # NIL THEN
+        ok := writeObject(out, types, ps.view, opt)
       ELSE
         ok := 1 = Stream.WriteChars(out, " ", 0, 1)
       END
@@ -718,5 +721,6 @@ RETURN
 END PrintDoc;
 
 BEGIN
-  readStruct := ReadStruct
+  readStruct  := ReadStruct;
+  writeObject := WriteObject
 END Odc.
