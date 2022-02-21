@@ -29,24 +29,32 @@ IMPORT
 CONST
   Version* = "0.d.0";
 
+VAR
+  options: Odc.Options;
+
 PROCEDURE Help(cli: BOOLEAN);
+VAR commanderTo: ARRAY 16 OF CHAR;
 BEGIN
-  log.sn("odcey - convert .odc to plain text");
+  log.sn("odcey - converter of .odc to plain text");
   log.n;
   log.sn("Usage:");
   IF cli THEN
-    log.sn(" 0. odcey text       <input> <output>");
-    log.sn(" 1. odcey add-to-git <dir>")
+    log.sn(" 0. odcey text       <input> <output> [-commander-to replacement]");
+    log.sn(" 1. odcey add-to-git <dir>");
+    commanderTo := "-commander-to"
   ELSE
     log.sn(" 0. odcey.text(input, output)");
-    log.sn(" 1. odcey.addToGit(dir)")
+    log.sn("    odcey.commanderTo(replacement)");
+    log.sn(" 1. odcey.addToGit(dir)");
+    commanderTo := "commanderTo"
   END;
   log.n;
   log.sn("0. print text content of .odc, empty arguments for standard IO");
-  log.sn("1. integrate to git repo as text converter");
+  log.s("   "); log.s(commanderTo); log.sn(" allows in output replacing this view by the string");
+  log.sn("1. integrate to git repo as text converter")
 END Help;
 
-PROCEDURE Text(input, output: ARRAY OF CHAR): BOOLEAN;
+PROCEDURE Text(input, output: ARRAY OF CHAR; opt: Odc.Options): BOOLEAN;
 VAR ok: BOOLEAN; in: Stream.PIn; out: Stream.POut; doc: Odc.Document;
 BEGIN
   IF input # "" THEN
@@ -68,7 +76,7 @@ BEGIN
       ELSE
         out := File.OpenOut(output)
       END;
-      ok := (out # NIL) & Odc.PrintDoc(out^, doc);
+      ok := (out # NIL) & Odc.PrintDoc(out^, doc, opt);
       IF out = NIL THEN
         log.sn("Can not open output")
       ELSIF ~ok THEN
@@ -154,10 +162,15 @@ BEGIN
   Help(FALSE)
 END help;
 
+PROCEDURE commanderTo*(replacement: ARRAY OF CHAR);
+BEGIN
+  options.commanderReplacement := replacement
+END commanderTo;
+
 PROCEDURE text*(input, output: ARRAY OF CHAR);
 VAR ignore: BOOLEAN;
 BEGIN
-  ignore := Text(input, output)
+  ignore := Text(input, output, options)
 END text;
 
 PROCEDURE addToGit*(gitDir: ARRAY OF CHAR);
@@ -168,51 +181,83 @@ END addToGit;
 
 PROCEDURE Cli*;
 VAR
-  arg, arg2: ARRAY CLI.MaxLen + 1 OF CHAR;
-  len: INTEGER;
+  args: ARRAY 2 OF ARRAY CLI.MaxLen + 1 OF CHAR;
+  len, i, argInd: INTEGER;
   ok: BOOLEAN;
+
+  PROCEDURE Option(VAR ind: INTEGER; par: ARRAY OF CHAR; VAR arg: ARRAY OF CHAR): BOOLEAN;
+  VAR ok: BOOLEAN; buf: ARRAY 16 OF CHAR; ofs: INTEGER;
+  BEGIN
+    ok := TRUE;
+    ofs := 0;
+    WHILE ok & (ind < CLI.count) & CLI.Get(buf, ofs, ind) & (buf = par) DO
+      INC(ind);
+      ofs := 0;
+      ok := FALSE;
+      IF ind = CLI.count THEN
+        log.s("Absent argument for parameter '"); log.s(par); log.sn("'")
+      ELSIF arg # "" THEN
+        log.s("Dublicated parameter '"); log.s(par); log.sn("'")
+      ELSIF ~CLI.Get(arg, ofs, ind) THEN
+        log.s("Argument for parameter '"); log.s(par); log.sn("' too long")
+      ELSE
+        INC(ind);
+        ok := TRUE
+      END;
+      ofs := 0
+    END
+  RETURN
+    ok
+  END Option;
 BEGIN
   ok := TRUE;
   len := 0;
-  IF (CLI.count = 0) OR ~CLI.Get(arg, len, 0) THEN
+  IF (CLI.count = 0) OR ~CLI.Get(args[0], len, 0) THEN
     ok := FALSE;
     Help(TRUE)
-  ELSIF arg = "help" THEN
+  ELSIF args[0] = "help" THEN
     Help(TRUE)
-  ELSIF arg = "version" THEN
+  ELSIF args[0] = "version" THEN
     log.sn(Version)
-  ELSIF arg = "text" THEN
-    arg := "";
-    arg2 := "";
-    IF CLI.count > 1 THEN
-      len := 0;
-      ASSERT(CLI.Get(arg, len, 1));
-      IF CLI.count = 3 THEN
+  ELSIF args[0] = "text" THEN
+    args[0] := "";
+    args[1] := "";
+    i := 1;
+    argInd := 0;
+    WHILE ok & (i < CLI.count) DO
+      ok := Option(i, "-commander-to", options.commanderReplacement)
+          & ((i = CLI.count) OR (argInd < LEN(args)));
+      IF ok & (i < CLI.count) THEN
         len := 0;
-        ASSERT(CLI.Get(arg2, len, 2))
-      ELSIF CLI.count # 2 THEN
-        ok := FALSE;
-        log.sn("Too many arguments for text")
+        ASSERT(CLI.Get(args[argInd], len, i));
+        INC(i);
+        INC(argInd)
       END
     END;
-    ok := ok & Text(arg, arg2)
-  ELSIF arg = "add-to-git" THEN
+    IF ok & (i < CLI.count) THEN
+      ok := FALSE;
+      log.sn("Too many arguments for command 'text'")
+    END;
+    ok := ok & Text(args[0], args[1], options)
+  ELSIF args[0] = "add-to-git" THEN
     IF CLI.count = 1 THEN
       ok := AddToGit("")
     ELSIF CLI.count = 2 THEN
       len := 0;
-      ASSERT(CLI.Get(arg, len, 1));
-      len := Chars0X.Trim(arg, 0);
-      ok := AddToGit(arg);
+      ASSERT(CLI.Get(args[0], len, 1));
+      len := Chars0X.Trim(args[0], 0);
+      ok := AddToGit(args[0]);
     ELSE
       ok := FALSE;
-      log.sn("Too many arguments for add-to-git")
+      log.sn("Too many arguments for command 'add-to-git'")
     END
   ELSE
     ok := FALSE;
-    log.s("Wrong command '"); log.s(arg); log.sn("'")
+    log.s("Wrong command '"); log.s(args[0]); log.sn("'")
   END;
   CLI.SetExitCode(1 - ORD(ok))
 END Cli;
 
+BEGIN
+  Odc.DefaultOptions(options);
 END odcey.

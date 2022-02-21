@@ -70,6 +70,10 @@ CONST
   CodeNonBreakingHyphen = 2011H;
 
 TYPE
+  Options* = RECORD
+    commanderReplacement*: ARRAY 64 OF CHAR
+  END;
+
   Types = RECORD
     desc: ARRAY 128 OF RECORD
       name: INTEGER;
@@ -77,7 +81,7 @@ TYPE
     END;
     names: ARRAY 4096 OF CHAR;
     top, currentDesc,
-    stdModel: INTEGER
+    textModelsStdModel, devCommandersStdView: INTEGER
   END;
 
   PBlock = POINTER TO Block;
@@ -87,6 +91,8 @@ TYPE
     next: PBlock
   END;
 
+  PObject = POINTER TO Object;
+
   PPiece = POINTER TO Piece;
   Piece = RECORD
     block: PBlock;
@@ -95,10 +101,10 @@ TYPE
 
     next: PPiece;
 
-    kind: BYTE
+    kind: BYTE;
+    view: PObject
   END;
 
-  PObject = POINTER TO Object;
   PStruct = POINTER TO Struct;
   Struct = RECORD
     kind: INTEGER;
@@ -132,7 +138,8 @@ VAR
 PROCEDURE TypesInit(VAR t: Types);
 BEGIN
   t.top := 0;
-  t.stdModel := -1;
+  t.textModelsStdModel := -1;
+  t.devCommandersStdView := -1;
   t.desc[0].name := 0;
   t.names := ""
 END TypesInit;
@@ -207,7 +214,8 @@ BEGIN
     p.block := NIL;
     p.ofs   := -1;
     p.next  := NIL;
-    p.kind := PieceView
+    p.kind  := PieceView;
+    p.view  := NIL
   END
 RETURN
   p # NIL
@@ -245,7 +253,7 @@ RETURN
 END ReadMidNext;
 
 PROCEDURE ReadPath(VAR in: Stream.In; VAR types: Types; VAR size: INTEGER; rest: INTEGER): BOOLEAN;
-VAR id: BYTE; ok: BOOLEAN; tid, prev, s: INTEGER;
+VAR id: BYTE; ok, ignore: BOOLEAN; tid, prev, s: INTEGER;
   PROCEDURE SetBase(VAR types: Types; prev, id: INTEGER);
   BEGIN
     IF prev >= 0 THEN
@@ -254,6 +262,18 @@ VAR id: BYTE; ok: BOOLEAN; tid, prev, s: INTEGER;
       types.currentDesc := id
     END
   END SetBase;
+
+  PROCEDURE Identify(VAR typeIndex: INTEGER; types: Types; name: ARRAY OF CHAR): BOOLEAN;
+  VAR match: BOOLEAN;
+  BEGIN
+    match := (typeIndex < 0)
+           & (0 = Chars0X.Compare(types.names, types.desc[types.currentDesc].name, name, 0));
+    IF match THEN
+      typeIndex := types.currentDesc
+    END
+  RETURN
+    match
+  END Identify;
 BEGIN
   prev := -1;
   ok := Read.Byte(in, id);
@@ -283,10 +303,9 @@ BEGIN
   END;
   size := s;
 
-  IF ok & (types.stdModel < 0)
-   & (0 = Chars0X.Compare(types.names, types.desc[types.currentDesc].name, "TextModels.StdModelDesc", 0))
-  THEN
-    types.stdModel := types.currentDesc
+  IF ok THEN
+    ignore := Identify(types.textModelsStdModel  , types, "TextModels.StdModelDesc"  )
+           OR Identify(types.devCommandersStdView, types, "DevCommanders.StdViewDesc")
   END
 RETURN
   ok
@@ -323,14 +342,14 @@ RETURN
 END ReadView;
 
 PROCEDURE ReadPieces(VAR in: Stream.In; p: PPiece): BOOLEAN;
-VAR ok: BOOLEAN; ofs, size: INTEGER; b: PBlock; viewId: BYTE;
+VAR ok: BOOLEAN; ofs, size: INTEGER; b: PBlock; viewcode: BYTE;
 BEGIN
   ok := TRUE;
   WHILE (p # NIL) & ok DO
     b := p.block;
     size := p.size;
     IF size <= 0 THEN
-      ok := Read.Byte(in, viewId)
+      ok := Read.Byte(in, viewcode) & (viewcode = 2)
     ELSE
       ofs := p.ofs;
       IF size <= LEN(b.data) - ofs THEN
@@ -347,7 +366,6 @@ BEGIN
         ok := ok & (size = Stream.ReadChars(in, b.data, 0, size))
       END
     END;
-    ASSERT(ok);
     p := p.next
   END
 RETURN
@@ -377,7 +395,7 @@ PROCEDURE TextNew(VAR obj: Text; types: Types): BOOLEAN;
 BEGIN
   NEW(obj);
   IF obj # NIL THEN
-    ObjInit(obj^, types.stdModel)
+    ObjInit(obj^, types.textModelsStdModel)
   END
 RETURN
   obj # NIL
@@ -413,7 +431,7 @@ VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
         DEC(rest);
         ok := (rest >= 0)
             & PieceViewNew(curr)
-            & ReadView(in, types, block, next, size, metaSize, struct.object);
+            & ReadView(in, types, block, next, size, metaSize, curr.view);
         DEC(metaSize, size)
       ELSE
         DEC(rest, ABS(textLen));
@@ -539,7 +557,7 @@ BEGIN
     size := pathSize + content + 16;
     next := next - 8 - content;
 
-    IF types.currentDesc = types.stdModel THEN
+    IF types.currentDesc = types.textModelsStdModel THEN
       ok := ReadStdModel(in, types, block, content, obj)
     ELSE
       ok := ReadAny(in, types, block, begin - 4, content, obj)
@@ -648,26 +666,38 @@ RETURN
   ok
 END WritePiece;
 
-PROCEDURE WritePieces(VAR out: Stream.Out; ps: PPiece): BOOLEAN;
+PROCEDURE WritePieces(VAR out: Stream.Out; ps: PPiece; types: Types; opt: Options): BOOLEAN;
+VAR ok: BOOLEAN; len: INTEGER;
 BEGIN
-  WHILE (ps # NIL)
-      & ((ps.kind = PieceView) OR WritePiece(out, ps^))
-  DO
+  ok := TRUE;
+  WHILE (ps # NIL) & ok DO
+    IF ps.kind = PieceView THEN
+      IF (opt.commanderReplacement # "")
+       & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
+      THEN
+        len := Chars0X.CalcLen(opt.commanderReplacement, 0);
+        ok := len = Stream.WriteChars(out, opt.commanderReplacement, 0, len)
+      ELSE
+        ok := 1 = Stream.WriteChars(out, " ", 0, 1)
+      END
+    ELSE
+      ok := WritePiece(out, ps^)
+    END;
     ps := ps.next
   END
 RETURN
   ps = NIL
 END WritePieces;
 
-PROCEDURE WriteObject(VAR out: Stream.Out; types: Types; obj: PObject): BOOLEAN;
+PROCEDURE WriteObject(VAR out: Stream.Out; types: Types; obj: PObject; opt: Options): BOOLEAN;
 VAR ok: BOOLEAN; struct: PStruct;
 BEGIN
-  IF obj.type = types.stdModel THEN
-    ok := WritePieces(out, obj(Text).pieces)
+  IF obj.type = types.textModelsStdModel THEN
+    ok := WritePieces(out, obj(Text).pieces, types, opt)
   ELSIF obj.first # NIL THEN
     struct := obj.first;
     REPEAT
-      ok := (struct.object = NIL) OR WriteObject(out, types, struct.object);
+      ok := (struct.object = NIL) OR WriteObject(out, types, struct.object, opt);
       struct := struct.next
     UNTIL ~ok OR (struct = NIL)
   ELSE
@@ -677,9 +707,14 @@ RETURN
   ok
 END WriteObject;
 
-PROCEDURE PrintDoc*(VAR out: Stream.Out; doc: Document): BOOLEAN;
+PROCEDURE DefaultOptions*(VAR opt: Options);
+BEGIN
+  opt.commanderReplacement := ""
+END DefaultOptions;
+
+PROCEDURE PrintDoc*(VAR out: Stream.Out; doc: Document; opt: Options): BOOLEAN;
 RETURN
-  (doc.struct.object = NIL) OR WriteObject(out, doc.types, doc.struct.object)
+  (doc.struct.object = NIL) OR WriteObject(out, doc.types, doc.struct.object, opt)
 END PrintDoc;
 
 BEGIN
