@@ -27,13 +27,13 @@ IMPORT
   Utf8;
 
 CONST
-  Version* = "0.d.0";
+  Version* = "0.d.1";
 
 VAR
   options: Odc.Options;
 
 PROCEDURE Help(cli: BOOLEAN);
-VAR commanderTo, skipEmbedded: ARRAY 42 OF CHAR;
+VAR commanderTo, skipEmbedded, skipComment: ARRAY 42 OF CHAR;
 BEGIN
   log.sn("odcey - converter of .odc to plain text");
   log.n;
@@ -42,17 +42,20 @@ BEGIN
     log.sn(" 0. odcey text       <input> <output> { options }");
     log.sn(" 1. odcey add-to-git <dir>");
     commanderTo := "-commander-to <arg>";
-    skipEmbedded := "-skip-embedded-view"
+    skipEmbedded := "-skip-embedded-view";
+    skipComment := "-skip-comment"
   ELSE
     log.sn(" 0. odcey.text(input, output)");
     log.sn(" 1. odcey.addToGit(dir)");
     commanderTo := "odcey.commanderTo(str)";
-    skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView})"
+    skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView})";
+    skipComment := "odcey.opt({Odc.SkipOberonComment})"
   END;
   log.n;
   log.sn("0. print text content of .odc, empty arguments for standard IO");
   log.s("   "); log.s(commanderTo); log.sn("  allows in output replacing this view by the argument");
   log.s("   "); log.s(skipEmbedded); log.sn("  skips recursive writing of embedded views");
+  log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
   log.sn("1. integrate to git repo as text converter")
 END Help;
 
@@ -254,6 +257,7 @@ BEGIN
     WHILE ok & (i < CLI.count) DO
       IF ~Option(i, "-commander-to", options.commanderReplacement, ok)
        & ~BoolOption(i, "-skip-embedded-view", Odc.SkipEmbeddedView, options.set, ok)
+       & ~BoolOption(i, "-skip-comment", Odc.SkipOberonComment, options.set, ok)
        & (argInd < LEN(args))
       THEN
         len := 0;

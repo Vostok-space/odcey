@@ -34,7 +34,7 @@ IMPORT
   Utf8;
 
 CONST
-  Version* = "0.d.0";
+  Version* = "0.d.1";
 
   Nil*     = 80H;
   Link*    = 81H;
@@ -69,8 +69,9 @@ CONST
   CodeHyphen            = 2010H;
   CodeNonBreakingHyphen = 2011H;
 
-  SkipEmbeddedView* = 0;
-  LastOption*       = 0;
+  SkipEmbeddedView*  = 0;
+  SkipOberonComment* = 1;
+  LastOption*        = 1;
 
 TYPE
   Options* = RECORD
@@ -134,11 +135,18 @@ TYPE
     struct: Struct
   END;
 
+  PrintContext = RECORD
+    prevChar: INTEGER;
+    commentsDeep: INTEGER;
+
+    opt: Options
+  END;
+
 VAR
   readStruct: PROCEDURE(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
                         VAR next, size: INTEGER; rest: INTEGER;
                         VAR struct: Struct): BOOLEAN;
-  writeObject: PROCEDURE(VAR out: Stream.Out; types: Types; obj: PObject; opt: Options): BOOLEAN;
+  writeObject: PROCEDURE(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
 
 PROCEDURE TypesInit(VAR t: Types);
 BEGIN
@@ -643,52 +651,84 @@ RETURN
   code
 END Code;
 
-PROCEDURE WritePiece(VAR out: Stream.Out; p: Piece): BOOLEAN;
-VAR ofs, size, len, charSize, code: INTEGER; b: PBlock; ok: BOOLEAN; utf8: ARRAY 4 OF CHAR;
+PROCEDURE IsNeedPrint(ctx: PrintContext): BOOLEAN;
+RETURN
+  ~(SkipOberonComment IN ctx.opt.set) OR (ctx.commentsDeep = 0)
+END IsNeedPrint;
+
+PROCEDURE WritePiece(VAR out: Stream.Out; VAR ctx: PrintContext; p: Piece): BOOLEAN;
+VAR ofs, size, len, charSize, code, prev, decDeep: INTEGER; b: PBlock; ok: BOOLEAN; utf8: ARRAY 4 OF CHAR;
 BEGIN
   charSize := p.kind;
   b := p.block;
   size := p.size;
   ofs := p.ofs;
+  ok := TRUE;
+  prev := ctx.prevChar;
   REPEAT
-    len := 0;
-
     IF charSize = 1 THEN
       code := Code(b.data[ofs])
     ELSE
       code := ORD(b.data[ofs]) + ORD(b.data[ofs + 1]) MOD 80H * 100H
     END;
+
     DEC(size, charSize);
     INC(ofs, charSize);
     IF ofs = LEN(b.data) THEN
       ofs := 0;
       b := b.next
     END;
-    ASSERT(Utf8.FromCode(utf8, len, code));
-    ok := len = Stream.WriteChars(out, utf8, 0, len)
-  UNTIL ~ok OR (size = 0)
+
+    decDeep := 0;
+    IF ORD("*") = code THEN
+      IF ORD("(") = prev THEN
+        INC(ctx.commentsDeep);
+        prev := -1
+      ELSE
+        prev := code
+      END;
+    ELSE
+      IF (ORD(")") = code) & (ORD("*") = prev) & (ctx.commentsDeep > 0) THEN
+        decDeep := -1
+      ELSIF (ctx.commentsDeep = 0) & (prev = ORD("(")) & (SkipOberonComment IN ctx.opt.set) THEN
+        ok := 1 = Stream.WriteChars(out, "(", 0, 1)
+      END;
+      prev := code
+    END;
+
+    IF ok
+     & (~(SkipOberonComment IN ctx.opt.set) OR (ctx.commentsDeep = 0) & (code # ORD("(")))
+    THEN
+      len := 0;
+      ASSERT(Utf8.FromCode(utf8, len, code));
+      ok := len = Stream.WriteChars(out, utf8, 0, len)
+    END;
+    INC(ctx.commentsDeep, decDeep)
+  UNTIL ~ok OR (size = 0);
+  ctx.prevChar := prev
 RETURN
   ok
 END WritePiece;
 
-PROCEDURE WritePieces(VAR out: Stream.Out; ps: PPiece; types: Types; opt: Options): BOOLEAN;
+PROCEDURE WritePieces(VAR out: Stream.Out; VAR ctx: PrintContext; ps: PPiece; types: Types): BOOLEAN;
 VAR ok: BOOLEAN; len: INTEGER;
 BEGIN
   ok := TRUE;
   WHILE (ps # NIL) & ok DO
     IF ps.kind = PieceView THEN
-      IF (opt.commanderReplacement # "")
+      IF (ctx.opt.commanderReplacement # "")
        & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
       THEN
-        len := Chars0X.CalcLen(opt.commanderReplacement, 0);
-        ok := len = Stream.WriteChars(out, opt.commanderReplacement, 0, len)
-      ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN opt.set) THEN
-        ok := writeObject(out, types, ps.view, opt)
-      ELSE
+        len := Chars0X.CalcLen(ctx.opt.commanderReplacement, 0);
+        ok := IsNeedPrint(ctx)
+           OR (len = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, len))
+      ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
+        ok := writeObject(out, ctx, types, ps.view)
+      ELSIF IsNeedPrint(ctx) THEN
         ok := 1 = Stream.WriteChars(out, " ", 0, 1)
       END
     ELSE
-      ok := WritePiece(out, ps^)
+      ok := WritePiece(out, ctx, ps^)
     END;
     ps := ps.next
   END
@@ -696,15 +736,15 @@ RETURN
   ps = NIL
 END WritePieces;
 
-PROCEDURE WriteObject(VAR out: Stream.Out; types: Types; obj: PObject; opt: Options): BOOLEAN;
+PROCEDURE WriteObject(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
 VAR ok: BOOLEAN; struct: PStruct;
 BEGIN
   IF obj.type = types.textModelsStdModel THEN
-    ok := WritePieces(out, obj(Text).pieces, types, opt)
+    ok := WritePieces(out, ctx, obj(Text).pieces, types)
   ELSIF obj.first # NIL THEN
     struct := obj.first;
     REPEAT
-      ok := (struct.object = NIL) OR WriteObject(out, types, struct.object, opt);
+      ok := (struct.object = NIL) OR WriteObject(out, ctx, types, struct.object);
       struct := struct.next
     UNTIL ~ok OR (struct = NIL)
   ELSE
@@ -721,10 +761,15 @@ BEGIN
 END DefaultOptions;
 
 PROCEDURE PrintDoc*(VAR out: Stream.Out; doc: Document; opt: Options): BOOLEAN;
+VAR ctx: PrintContext;
 BEGIN
-  ASSERT(opt.set - {0 .. LastOption} = {})
+  ASSERT(opt.set - {0 .. LastOption} = {});
+
+  ctx.opt := opt;
+  ctx.prevChar := -1;
+  ctx.commentsDeep := 0
 RETURN
-  (doc.struct.object = NIL) OR WriteObject(out, doc.types, doc.struct.object, opt)
+  (doc.struct.object = NIL) OR WriteObject(out, ctx, doc.types, doc.struct.object)
 END PrintDoc;
 
 BEGIN
