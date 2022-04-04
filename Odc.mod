@@ -34,7 +34,7 @@ IMPORT
   Utf8;
 
 CONST
-  Version* = "0.d.1";
+  Version* = "0.d.2";
 
   Nil*     = 80H;
   Link*    = 81H;
@@ -76,6 +76,8 @@ CONST
 TYPE
   Options* = RECORD
     commanderReplacement*: ARRAY 64 OF CHAR;
+    tab*: ARRAY 16 OF CHAR;
+    tabLen: INTEGER;
     set*: SET
   END;
 
@@ -657,7 +659,8 @@ RETURN
 END IsNeedPrint;
 
 PROCEDURE WritePiece(VAR out: Stream.Out; VAR ctx: PrintContext; p: Piece): BOOLEAN;
-VAR ofs, size, len, charSize, code, prev, decDeep: INTEGER; b: PBlock; ok: BOOLEAN; utf8: ARRAY 4 OF CHAR;
+VAR ofs, size, len, charSize, code, prev, decDeep: INTEGER; b: PBlock;
+    ok, skipComment: BOOLEAN; utf8: ARRAY 4 OF CHAR;
 BEGIN
   charSize := p.kind;
   b := p.block;
@@ -665,6 +668,7 @@ BEGIN
   ofs := p.ofs;
   ok := TRUE;
   prev := ctx.prevChar;
+  skipComment := SkipOberonComment IN ctx.opt.set;
   REPEAT
     IF charSize = 1 THEN
       code := Code(b.data[ofs])
@@ -686,7 +690,7 @@ BEGIN
         prev := -1
       ELSE
         prev := code
-      END;
+      END
     ELSE
       IF (ORD(")") = code) & (ORD("*") = prev) & (ctx.commentsDeep > 0) THEN
         decDeep := -1
@@ -696,12 +700,14 @@ BEGIN
       prev := code
     END;
 
-    IF ok
-     & (~(SkipOberonComment IN ctx.opt.set) OR (ctx.commentsDeep = 0) & (code # ORD("(")))
-    THEN
+    IF ok & (~skipComment OR (ctx.commentsDeep = 0) & (code # ORD("("))) THEN
       len := 0;
-      ASSERT(Utf8.FromCode(utf8, len, code));
-      ok := len = Stream.WriteChars(out, utf8, 0, len)
+      IF code # ORD(Utf8.Tab) THEN
+        ASSERT(Utf8.FromCode(utf8, len, code));
+        ok := len = Stream.WriteChars(out, utf8, 0, len)
+      ELSE
+        ok := ctx.opt.tabLen = Stream.WriteChars(out, ctx.opt.tab, 0, ctx.opt.tabLen)
+      END
     END;
     INC(ctx.commentsDeep, decDeep)
   UNTIL ~ok OR (size = 0);
@@ -757,6 +763,8 @@ END WriteObject;
 PROCEDURE DefaultOptions*(VAR opt: Options);
 BEGIN
   opt.commanderReplacement := "";
+  opt.tab[0] := Utf8.Tab;
+  opt.tab[1] := Utf8.Null;
   opt.set := {}
 END DefaultOptions;
 
@@ -766,6 +774,7 @@ BEGIN
   ASSERT(opt.set - {0 .. LastOption} = {});
 
   ctx.opt := opt;
+  ctx.opt.tabLen := Chars0X.CalcLen(opt.tab, 0);
   ctx.prevChar := -1;
   ctx.commentsDeep := 0
 RETURN

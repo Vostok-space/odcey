@@ -27,13 +27,13 @@ IMPORT
   Utf8;
 
 CONST
-  Version* = "0.d.1";
+  Version* = "0.d.2";
 
 VAR
   options: Odc.Options;
 
 PROCEDURE Help(cli: BOOLEAN);
-VAR commanderTo, skipEmbedded, skipComment: ARRAY 42 OF CHAR;
+VAR commanderTo, skipEmbedded, skipComment, tab: ARRAY 42 OF CHAR;
 BEGIN
   log.sn("odcey - converter of .odc to plain text");
   log.n;
@@ -43,19 +43,22 @@ BEGIN
     log.sn(" 1. odcey add-to-git <dir>");
     commanderTo := "-commander-to <arg>";
     skipEmbedded := "-skip-embedded-view";
-    skipComment := "-skip-comment"
+    skipComment := "-skip-comment";
+    tab := "-tab"
   ELSE
     log.sn(" 0. odcey.text(input, output)");
     log.sn(" 1. odcey.addToGit(dir)");
     commanderTo := "odcey.commanderTo(str)";
     skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView})";
-    skipComment := "odcey.opt({Odc.SkipOberonComment})"
+    skipComment := "odcey.opt({Odc.SkipOberonComment})";
+    tab := "odcey.tab(string)"
   END;
   log.n;
   log.sn("0. print text content of .odc, empty arguments for standard IO");
   log.s("   "); log.s(commanderTo); log.sn("  allows in output replacing this view by the argument");
   log.s("   "); log.s(skipEmbedded); log.sn("  skips recursive writing of embedded views");
   log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
+  log.s("   "); log.s(tab); log.sn("  tabulation replacement");
   log.sn("1. integrate to git repo as text converter")
 END Help;
 
@@ -178,6 +181,11 @@ BEGIN
   options.set := set
 END opt;
 
+PROCEDURE tab*(str: ARRAY OF CHAR);
+BEGIN
+  options.tab := str
+END tab;
+
 PROCEDURE text*(input, output: ARRAY OF CHAR);
 VAR ignore: BOOLEAN;
 BEGIN
@@ -192,7 +200,7 @@ END addToGit;
 
 PROCEDURE Cli*;
 VAR
-  args: ARRAY 2 OF ARRAY CLI.MaxLen + 1 OF CHAR;
+  args: ARRAY 2 OF ARRAY CLI.MaxLen + 1 OF CHAR; tabOpt: ARRAY LEN(options.tab) OF CHAR;
   len, i, argInd: INTEGER;
   ok: BOOLEAN;
 
@@ -254,10 +262,12 @@ BEGIN
     args[1] := "";
     i := 1;
     argInd := 0;
+    tabOpt := "";
     WHILE ok & (i < CLI.count) DO
       IF ~Option(i, "-commander-to", options.commanderReplacement, ok)
        & ~BoolOption(i, "-skip-embedded-view", Odc.SkipEmbeddedView, options.set, ok)
        & ~BoolOption(i, "-skip-comment", Odc.SkipOberonComment, options.set, ok)
+       & ~Option(i, "-tab", tabOpt, ok)
        & (argInd < LEN(args))
       THEN
         len := 0;
@@ -265,6 +275,9 @@ BEGIN
         INC(i);
         INC(argInd)
       END
+    END;
+    IF tabOpt # "" THEN
+      ASSERT(Chars0X.Set(options.tab, tabOpt))
     END;
     IF ok & (i < CLI.count) THEN
       ok := FALSE;
