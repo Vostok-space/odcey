@@ -5,7 +5,7 @@ Provides converting to plain text.
 ## Usage
 
     1. odcey text       [input [output]] { options }
-    2. odcey add-to-git [dir]
+    2. odcey git [dir]
 
 0. print text content of .odc; empty arguments for standard IO
   -commander-to <arg>  allows in output replacing DevCommanders.StdView by the argument
