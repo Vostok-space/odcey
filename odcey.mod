@@ -27,7 +27,7 @@ IMPORT
   Utf8;
 
 CONST
-  Version* = "0.d.2";
+  Version* = "0.d.3";
 
 VAR
   options: Odc.Options;
@@ -39,27 +39,28 @@ BEGIN
   log.n;
   log.sn("Usage:");
   IF cli THEN
-    log.sn(" 0. odcey text       <input> <output> { options }");
-    log.sn(" 1. odcey add-to-git <dir>");
-    commanderTo := "-commander-to <arg>";
+    log.sn(" 0. odcey text  [input [output]] { options }");
+    log.sn(" 1. odcey git   [dir]");
+    commanderTo  := "-commander-to <arg>";
     skipEmbedded := "-skip-embedded-view";
-    skipComment := "-skip-comment";
-    tab := "-tab"
+    skipComment  := "-skip-comment      ";
+    tab          := "-tab               "
   ELSE
     log.sn(" 0. odcey.text(input, output)");
     log.sn(" 1. odcey.addToGit(dir)");
-    commanderTo := "odcey.commanderTo(str)";
-    skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView})";
-    skipComment := "odcey.opt({Odc.SkipOberonComment})";
-    tab := "odcey.tab(string)"
+    commanderTo  := "odcey.commanderTo(str)            ";
+    skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView })";
+    skipComment  := "          {Odc.SkipOberonComment} ";
+    tab          := "odcey.tab(str)                    "
   END;
   log.n;
   log.sn("0. print text content of .odc, empty arguments for standard IO");
-  log.s("   "); log.s(commanderTo); log.sn("  allows in output replacing this view by the argument");
-  log.s("   "); log.s(skipEmbedded); log.sn("  skips recursive writing of embedded views");
+  log.s("   "); log.s(commanderTo); log.sn("  set Commander-view replacement");
+  log.s("   "); log.s(skipEmbedded); log.sn("  skips embedded views writing");
   log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
-  log.s("   "); log.s(tab); log.sn("  tabulation replacement");
-  log.sn("1. integrate to git repo as text converter")
+  log.s("   "); log.s(tab); log.sn("  set tabulation replacement");
+  log.n;
+  log.sn("1. integrate to a .git repo as a text converter")
 END Help;
 
 PROCEDURE Text(input, output: ARRAY OF CHAR; opt: Odc.Options): BOOLEAN;
@@ -284,7 +285,7 @@ BEGIN
       log.sn("Too many arguments for command 'text'")
     END;
     ok := ok & Text(args[0], args[1], options)
-  ELSIF args[0] = "add-to-git" THEN
+  ELSIF args[0] = "git" THEN
     IF CLI.count = 1 THEN
       ok := AddToGit("")
     ELSIF CLI.count = 2 THEN
@@ -294,7 +295,7 @@ BEGIN
       ok := AddToGit(args[0]);
     ELSE
       ok := FALSE;
-      log.sn("Too many arguments for command 'add-to-git'")
+      log.sn("Too many arguments for command 'git'")
     END
   ELSE
     ok := FALSE;
