@@ -27,7 +27,7 @@ IMPORT
   Utf8;
 
 CONST
-  Version* = "0.d.3";
+  Version* = "0.1.0";
 
 VAR
   options: Odc.Options;
@@ -35,16 +35,16 @@ VAR
 PROCEDURE Help(cli: BOOLEAN);
 VAR commanderTo, skipEmbedded, skipComment, tab: ARRAY 42 OF CHAR;
 BEGIN
-  log.sn("odcey - converter of .odc to plain text");
+  log.sn("odcey - converter of .odc format to plain text");
   log.n;
   log.sn("Usage:");
   IF cli THEN
     log.sn(" 0. odcey text  [input [output]] { options }");
     log.sn(" 1. odcey git   [dir]");
-    commanderTo  := "-commander-to <arg>";
+    commanderTo  := "-commander-to <str>";
     skipEmbedded := "-skip-embedded-view";
     skipComment  := "-skip-comment      ";
-    tab          := "-tab               "
+    tab          := "-tab <str>         "
   ELSE
     log.sn(" 0. odcey.text(input, output)");
     log.sn(" 1. odcey.addToGit(dir)");
@@ -54,13 +54,13 @@ BEGIN
     tab          := "odcey.tab(str)                    "
   END;
   log.n;
-  log.sn("0. print text content of .odc, empty arguments for standard IO");
+  log.sn("0. Print text content of .odc, empty arguments for standard IO");
   log.s("   "); log.s(commanderTo); log.sn("  set Commander-view replacement");
   log.s("   "); log.s(skipEmbedded); log.sn("  skips embedded views writing");
   log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
   log.s("   "); log.s(tab); log.sn("  set tabulation replacement");
   log.n;
-  log.sn("1. integrate to a .git repo as a text converter")
+  log.sn("1. Embed to a .git repo as a text converter; empty argument for current dir")
 END Help;
 
 PROCEDURE Text(input, output: ARRAY OF CHAR; opt: Odc.Options): BOOLEAN;

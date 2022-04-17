@@ -3,22 +3,24 @@ Command-line tool for .odc format, used by BlackBox Component Builder
 Provides converting to plain text.
 
 ## Usage
+    odcey text  [input [output]] { options }
+    odcey git   [dir]
 
-    1. odcey text       [input [output]] { options }
-    2. odcey git [dir]
+Command 'text' prints text content of .odc; empty arguments for standard IO
 
-0. print text content of .odc; empty arguments for standard IO
-  -commander-to <arg>  allows in output replacing DevCommanders.StdView by the argument
-  -skip-embedded-view  skips recursive writing of embedded views
-1. integrate to git repo as text converter, what equal to commands:
+    -commander-to <str>  allows in output replacing DevCommanders.StdView by the argument
+    -skip-embedded-view  skips recursive writing of embedded views
+    -skip-comment        skips (* Oberon comments *)
+    -tab <str>           set tabulation replacement
 
-        echo '*.odc diff=cp' >> .git/info/attributes
-        echo '[diff "cp"]' >> .git/config
-        echo '	binary = true' >> .git/config
-        echo '	textconv = odcey text <' >> .git/config
+Command 'git' embeds to git repo as text converter, what equal to commands:
+
+    echo '*.odc diff=cp' >> .git/info/attributes
+    echo '[diff "cp"]' >> .git/config
+    echo '	binary = true' >> .git/config
+    echo '	textconv = odcey text <' >> .git/config
 
 ## Install
-
     /usr/bin/sudo snap install odcey
     # or
     brew tap vostok-space/oberon &&
