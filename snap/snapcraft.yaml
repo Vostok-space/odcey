@@ -15,11 +15,10 @@ parts:
   odcey:
     plugin: nil
     override-build: |
-      snap install --edge --classic vostok
-      vostok to-bin odcey.Cli odcey -m . -cc "cc -O1 -flto -s"
-      snapcraftctl set-version `./odcey version`
+      snap install --beta --classic vostok
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/bin
-      cp odcey $SNAPCRAFT_PART_INSTALL/usr/bin/
+      vostok to-bin odcey.Cli $SNAPCRAFT_PART_INSTALL/usr/bin/odcey -m . -cc "cc -O1 -flto -s"
+      snapcraftctl set-version `$SNAPCRAFT_PART_INSTALL/usr/bin/odcey version`
 
     source:
       .
