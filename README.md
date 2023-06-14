@@ -20,6 +20,13 @@ Command 'git' embeds to git repo as text converter, what equal to commands:
     	binary = true
     	textconv = odcey text <' >> .git/config
 
+### Midnight Commander integration
+Add to ~/.config/mc/mc.ext
+
+    #odc BlackBox Component Builder container document
+    shell/.odc
+    View=%view{ascii} odcey text < %f
+
 ## Install
     /usr/bin/sudo snap install odcey
     # or
