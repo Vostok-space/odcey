@@ -33,7 +33,7 @@ Add to ~/.config/mc/mc.ext
     brew tap vostok-space/oberon &&
     brew install odcey
     # or
-    /usr/bin/sudo npm install --group odcey
+    /usr/bin/sudo npm install --global odcey
 
 ## Build
     # install vostok-translator if it still absent through snap
