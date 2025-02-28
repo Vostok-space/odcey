@@ -1,6 +1,6 @@
 #!/usr/bin/env -S ost .
 
-Copyright 2022 ComdivByZero
+Copyright 2022-2025 ComdivByZero
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,30 +20,39 @@ IMPORT
   log,
   CLI,
   Odc,
+  CFiles,
   Stream := VDataStream,
   File := VFileStream,
+  Copy := VCopy,
   VDefaultIO,
-  Chars0X,
-  Utf8;
+  OsEnv,
+  Charz,
+  Utf8, Windows1251 := OldCharsetWindows1251;
 
 CONST
-  Version* = "0.1.0";
+  Version* = "0.2";
+
+  McConfig = ".config/mc/mc.ext.ini";
+  McConfigBackup = ".config/mc/mc.ext.ini~";
+  McConfigNew = ".config/odcey-new-mc.ext.ini";
 
 VAR
   options: Odc.Options;
 
 PROCEDURE Help(cli: BOOLEAN);
-VAR commanderTo, skipEmbedded, skipComment, tab: ARRAY 42 OF CHAR;
+VAR commanderTo, skipEmbedded, skipComment, tab, windows1251: ARRAY 42 OF CHAR;
 BEGIN
   log.sn("odcey - converter of .odc format to plain text");
   log.n;
   log.sn("Usage:");
   IF cli THEN
-    log.sn(" 0. odcey text  [input [output]] { options }");
+    log.sn(" 0. odcey text  [input [output]] { options }"); log.n;
     log.sn(" 1. odcey git   [dir]");
+    log.sn(" 2. odcey mc");
     commanderTo  := "-commander-to <str>";
     skipEmbedded := "-skip-embedded-view";
     skipComment  := "-skip-comment      ";
+    windows1251  := "-input-windows1251 ";
     tab          := "-tab <str>         "
   ELSE
     log.sn(" 0. odcey.text(input, output)");
@@ -51,6 +60,7 @@ BEGIN
     commanderTo  := "odcey.commanderTo(str)            ";
     skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView })";
     skipComment  := "          {Odc.SkipOberonComment} ";
+    windows1251  := "          {Odc.InputWindows1251}  ";
     tab          := "odcey.tab(str)                    "
   END;
   log.n;
@@ -58,9 +68,12 @@ BEGIN
   log.s("   "); log.s(commanderTo); log.sn("  set Commander-view replacement");
   log.s("   "); log.s(skipEmbedded); log.sn("  skips embedded views writing");
   log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
+  log.s("   "); log.s(windows1251); log.sn("  set charset Windows-1251 instead of Latin-1");
+  log.s("   "); log.sn("  (useful for legacy Cyrillic BlackBox builds)");
   log.s("   "); log.s(tab); log.sn("  set tabulation replacement");
   log.n;
-  log.sn("1. Embed to a .git repo as a text converter; empty argument for current dir")
+  log.sn("1. Embed to a .git repo as a text converter; empty argument for current dir");
+  log.sn("2. Configure viewer of midnight commander")
 END Help;
 
 PROCEDURE Text(input, output: ARRAY OF CHAR; opt: Odc.Options): BOOLEAN;
@@ -104,56 +117,73 @@ BEGIN
   len := 0
 RETURN
    (    (dir = "")
-    OR  Chars0X.CopyString(res, len, dir)
-      & Chars0X.CopyString(res, len, "/")
+    OR  Charz.CopyString(res, len, dir)
+      & Charz.PutChar(res, len, "/")
    )
- & Chars0X.CopyString(res, len, file)
+ & Charz.CopyString(res, len, file)
 END ConcatPath;
+
+PROCEDURE Open(dir, file: ARRAY OF CHAR): File.Out;
+VAR path: ARRAY 4096 OF CHAR; out: File.Out;
+BEGIN
+  IF ConcatPath(path, dir, file) THEN
+    out := File.OpenForAppend(path)
+  ELSE
+    out := NIL
+  END;
+  IF out = NIL THEN
+    log.s("Can not open '");
+    log.s(path);
+    log.sn("'")
+  END
+RETURN
+  out
+END Open;
+
+PROCEDURE OpenIn(dir, file: ARRAY OF CHAR): File.In;
+VAR path: ARRAY 4096 OF CHAR; in: File.In;
+BEGIN
+  IF ConcatPath(path, dir, file) THEN
+    in := File.OpenIn(path)
+  ELSE
+    in := NIL
+  END;
+  IF in = NIL THEN
+    log.s("Can not open '");
+    log.s(path);
+    log.sn("'")
+  END
+RETURN
+  in
+END OpenIn;
 
 PROCEDURE AddToGit(gitDir: ARRAY OF CHAR): BOOLEAN;
 VAR ok: BOOLEAN; attrs, config: File.Out; str: ARRAY 64 OF CHAR; len: INTEGER;
-
-  PROCEDURE Open(dir, file: ARRAY OF CHAR): File.Out;
-  VAR path: ARRAY 4096 OF CHAR; out: File.Out;
-  BEGIN
-    IF ConcatPath(path, dir, file) THEN
-      out := File.OpenForAppend(path)
-    ELSE
-      out := NIL
-    END;
-    IF out = NIL THEN
-      log.s("Can not open '");
-      log.s(path);
-      log.sn("'")
-    END
-  RETURN
-    out
-  END Open;
 BEGIN
   attrs  := Open(gitDir, ".git/info/attributes");
   config := Open(gitDir, ".git/config");
   ok := (attrs # NIL) & (config # NIL);
   IF ok THEN
     len := 0;
-    ASSERT(Chars0X.PutChar   (str, len, Utf8.NewLine)
-         & Chars0X.CopyString(str, len, "*.odc diff=cp")
-         & Chars0X.PutChar   (str, len, Utf8.NewLine));
+    ASSERT(Charz.PutChar   (str, len, Utf8.NewLine)
+         & Charz.CopyString(str, len, "*.odc diff=cp")
+         & Charz.PutChar   (str, len, Utf8.NewLine));
     ok := len = Stream.WriteChars(attrs^, str, 0, len);
     IF ~ok THEN
       log.sn("Can not edit .git/info/attributes")
     ELSE
       len := 0;
-      ASSERT(Chars0X.PutChar   (str, len, Utf8.NewLine)
-           & Chars0X.CopyString(str, len, "[diff ")
-           & Chars0X.PutChar   (str, len, Utf8.DQuote)
-           & Chars0X.CopyString(str, len, "cp")
-           & Chars0X.PutChar   (str, len, Utf8.DQuote)
-           & Chars0X.PutChar   (str, len, "]")
-           & Chars0X.PutChar   (str, len, Utf8.NewLine)
-           & Chars0X.CopyString(str, len, "	binary = true")
-           & Chars0X.PutChar   (str, len, Utf8.NewLine)
-           & Chars0X.CopyString(str, len, "	textconv = odcey text <")
-           & Chars0X.PutChar   (str, len, Utf8.NewLine));
+      ASSERT(Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.CopyString(str, len, "[diff ")
+           & Charz.PutChar   (str, len, Utf8.DQuote)
+           & Charz.CopyString(str, len, "cp")
+           & Charz.PutChar   (str, len, Utf8.DQuote)
+           & Charz.PutChar   (str, len, "]")
+           & Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.CopyString(str, len, "	binary = true")
+           & Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.CopyString(str, len, "	textconv = odcey text <")
+           & Charz.PutChar   (str, len, Utf8.NewLine));
       ok := len = Stream.WriteChars(config^, str, 0, len);
       IF ~ok THEN
         log.sn("Can not edit .git/config")
@@ -163,8 +193,52 @@ BEGIN
   File.CloseOut(attrs);
   File.CloseOut(config);
 RETURN
-  FALSE
+  ok
 END AddToGit;
+
+PROCEDURE Rename(dir, name, newName: ARRAY OF CHAR): BOOLEAN;
+VAR old, new: ARRAY 1000H OF CHAR;
+RETURN
+  ConcatPath(old, dir, name)
+& ConcatPath(new, dir, newName)
+& CFiles.Rename(old, 0, new, 0)
+END Rename;
+
+PROCEDURE AddToMc(): BOOLEAN;
+VAR ok: BOOLEAN; config: File.Out; old: File.In; home, str: ARRAY 100H OF CHAR; len: INTEGER;
+BEGIN
+  len := 0;
+  ok := OsEnv.Get(home, len, "HOME");
+  IF ok THEN
+    config := Open(home, McConfigNew);
+    old := OpenIn(home, McConfig);
+    ok := (config # NIL);
+    IF ok THEN
+      len := 0;
+      ASSERT(Charz.CopyString(str, len, "#odc BlackBox Component Builder container document")
+           & Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.CopyString(str, len, "[odc]")
+           & Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.CopyString(str, len, "Shell=.odc")
+           & Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.CopyString(str, len, "View=%view{ascii} odcey text %f")
+           & Charz.PutChar   (str, len, Utf8.NewLine)
+           & Charz.PutChar   (str, len, Utf8.NewLine));
+      ok := (len = Stream.WriteChars(config^, str, 0, len));
+      IF ok THEN
+        Copy.UntilEnd(old^, config^) (* TODO *)
+      END
+    END;
+    File.CloseIn(old);
+    File.CloseOut(config);
+    IF ok THEN
+      ok := Rename(home, McConfig, McConfigBackup)
+          & Rename(home, McConfigNew, McConfig)
+    END
+  END
+RETURN
+  ok
+END AddToMc;
 
 PROCEDURE help*;
 BEGIN
@@ -198,6 +272,13 @@ VAR ignore: BOOLEAN;
 BEGIN
   ignore := AddToGit(gitDir)
 END addToGit;
+
+PROCEDURE addToMc*;
+BEGIN
+  IF ~AddToMc() THEN
+    log.s("Can not edit "); log.sn(McConfig)
+  END
+END addToMc;
 
 PROCEDURE Cli*;
 VAR
@@ -268,6 +349,7 @@ BEGIN
       IF ~Option(i, "-commander-to", options.commanderReplacement, ok)
        & ~BoolOption(i, "-skip-embedded-view", Odc.SkipEmbeddedView, options.set, ok)
        & ~BoolOption(i, "-skip-comment", Odc.SkipOberonComment, options.set, ok)
+       & ~BoolOption(i, "-input-windows1251", Odc.InputWindows1251, options.set, ok)
        & ~Option(i, "-tab", tabOpt, ok)
        & (argInd < LEN(args))
       THEN
@@ -278,7 +360,7 @@ BEGIN
       END
     END;
     IF tabOpt # "" THEN
-      ASSERT(Chars0X.Set(options.tab, tabOpt))
+      ASSERT(Charz.Set(options.tab, tabOpt))
     END;
     IF ok & (i < CLI.count) THEN
       ok := FALSE;
@@ -291,12 +373,14 @@ BEGIN
     ELSIF CLI.count = 2 THEN
       len := 0;
       ASSERT(CLI.Get(args[0], len, 1));
-      len := Chars0X.Trim(args[0], 0);
+      len := Charz.Trim(args[0], 0);
       ok := AddToGit(args[0]);
     ELSE
       ok := FALSE;
       log.sn("Too many arguments for command 'git'")
     END
+  ELSIF args[0] = "mc" THEN
+    ok := AddToMc()
   ELSE
     ok := FALSE;
     log.s("Wrong command '"); log.s(args[0]); log.sn("'")

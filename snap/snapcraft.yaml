@@ -1,5 +1,6 @@
 name: odcey
-base: core18
+base: bare
+build-base: core22
 adopt-info: odcey
 license: Apache-2.0
 summary: Text converter of ".odc"-format from BlackBox Component Builder
@@ -11,14 +12,36 @@ description: |
 grade: stable
 confinement: strict
 
+architectures:
+  - build-on: [amd64]
+  - build-on: [riscv64]
+  - build-on: [arm64]
+  - build-on: [armhf]
+  - build-on: [s390x]
+  - build-on: [ppc64el]
+
 parts:
   odcey:
     plugin: nil
+    build-snaps:
+      - vostok/latest/edge
+    build-packages:
+      - on amd64 to riscv64:
+        - gcc-riscv64-linux-gnu
+        - libc6-dev-riscv64-cross
+      - else:
+        - musl-tools
+
     override-build: |
-      snap install --beta --classic vostok
+      snap alias vostok ost
+      if [ "${SNAPCRAFT_TARGET_ARCH}" = riscv64 ]; then
+        CC=riscv64-linux-gnu-gcc
+      else
+        CC=musl-gcc
+      fi
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/bin
-      vostok to-bin odcey.Cli $SNAPCRAFT_PART_INSTALL/usr/bin/odcey -m . -cc "cc -O1 -flto -s"
-      snapcraftctl set-version `$SNAPCRAFT_PART_INSTALL/usr/bin/odcey version`
+      ost to-bin odcey.Cli $SNAPCRAFT_PART_INSTALL/usr/bin/odcey -m . -cc "$CC -Os -flto -s -static"
+      craftctl set version=$(./odcey.mod Cli version)
 
     source:
       .

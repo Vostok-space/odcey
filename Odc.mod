@@ -6,7 +6,7 @@ Used as sample:
  * BlackBox/Docu/BB-Chars
  * odcread source
 
-Copyright 2022 ComdivByZero
+Copyright 2022-2025 ComdivByZero
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,16 +25,12 @@ MODULE Odc;
 IMPORT
   Stream := VDataStream,
   Read := VStreamRead,
-  VDefaultIO,
-  File := VFileStream,
-  log,
-  CLI,
-  Chars0X,
+  Charz,
   TypesLimits,
-  Utf8;
+  Utf8, Windows1251 := OldCharsetWindows1251;
 
 CONST
-  Version* = "0.d.2";
+  Version* = "0.d.3";
 
   Nil*     = 80H;
   Link*    = 81H;
@@ -65,13 +61,15 @@ CONST
   NonBreakingHyphen = 91X;
   BlackboxReplacementMax = 91X;
 
+  CodeFigureSpace       = 2007H;
   CodeSpaceZeroWidth    = 200BH;
   CodeHyphen            = 2010H;
   CodeNonBreakingHyphen = 2011H;
 
   SkipEmbeddedView*  = 0;
   SkipOberonComment* = 1;
-  LastOption*        = 1;
+  InputWindows1251*  = 2;
+  LastOption*        = 2;
 
 TYPE
   Options* = RECORD
@@ -282,7 +280,7 @@ VAR id: BYTE; ok, ignore: BOOLEAN; tid, prev, s: INTEGER;
   VAR match: BOOLEAN;
   BEGIN
     match := (typeIndex < 0)
-           & (0 = Chars0X.Compare(types.names, types.desc[types.currentDesc].name, name, 0));
+           & (0 = Charz.Compare(types.names, types.desc[types.currentDesc].name, name, 0));
     IF match THEN
       typeIndex := types.currentDesc
     END
@@ -596,7 +594,7 @@ BEGIN
     struct.kind   := id;
     IF id = Nil THEN
       size := 9;
-      ok := (rest >= size) & ReadNil(in, next);
+      ok := (rest >= size) & ReadNil(in, next)
     ELSIF (id = Link) OR (id = NewLink) THEN
       size := 13;
       ok := (rest >= size) & ReadLink(in, id = NewLink, next)
@@ -641,7 +639,7 @@ BEGIN
   ELSIF SpaceZeroWidth = char THEN
     code := CodeSpaceZeroWidth
   ELSIF DigitSpace = char THEN
-    code := ORD(Utf8.Space)
+    code := CodeFigureSpace
   ELSIF Hyphen = char THEN
     code := CodeHyphen
   ELSIF NonBreakingHyphen = char THEN
@@ -660,7 +658,7 @@ END IsNeedPrint;
 
 PROCEDURE WritePiece(VAR out: Stream.Out; VAR ctx: PrintContext; p: Piece): BOOLEAN;
 VAR ofs, size, len, charSize, code, prev, decDeep: INTEGER; b: PBlock;
-    ok, skipComment: BOOLEAN; utf8: ARRAY 4 OF CHAR;
+    ok, skipComment, isWindows1251: BOOLEAN; utf8: ARRAY 4 OF CHAR;
 BEGIN
   charSize := p.kind;
   b := p.block;
@@ -669,11 +667,16 @@ BEGIN
   ok := TRUE;
   prev := ctx.prevChar;
   skipComment := SkipOberonComment IN ctx.opt.set;
+  isWindows1251 := InputWindows1251 IN ctx.opt.set;
   REPEAT
-    IF charSize = 1 THEN
-      code := Code(b.data[ofs])
+    IF charSize # 1 THEN
+      code := ORD(b.data[ofs]) + ORD(b.data[ofs + 1]) MOD 80H * 100H;
+      IF code = ORD(Utf8.CarRet) THEN code := ORD(Utf8.NewLine) END
     ELSE
-      code := ORD(b.data[ofs]) + ORD(b.data[ofs + 1]) MOD 80H * 100H
+      code := Code(b.data[ofs]);
+      IF isWindows1251 & (code = ORD(b.data[ofs])) THEN
+        code := Windows1251.ToUnicode(code)
+      END
     END;
 
     DEC(size, charSize);
@@ -725,7 +728,7 @@ BEGIN
       IF (ctx.opt.commanderReplacement # "")
        & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
       THEN
-        len := Chars0X.CalcLen(ctx.opt.commanderReplacement, 0);
+        len := Charz.CalcLen(ctx.opt.commanderReplacement, 0);
         ok := IsNeedPrint(ctx)
            OR (len = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, len))
       ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
@@ -763,8 +766,7 @@ END WriteObject;
 PROCEDURE DefaultOptions*(VAR opt: Options);
 BEGIN
   opt.commanderReplacement := "";
-  opt.tab[0] := Utf8.Tab;
-  opt.tab[1] := Utf8.Null;
+  opt.tab := Utf8.Tab;
   opt.set := {}
 END DefaultOptions;
 
@@ -774,7 +776,7 @@ BEGIN
   ASSERT(opt.set - {0 .. LastOption} = {});
 
   ctx.opt := opt;
-  ctx.opt.tabLen := Chars0X.CalcLen(opt.tab, 0);
+  ctx.opt.tabLen := Charz.CalcLen(opt.tab, 0);
   ctx.prevChar := -1;
   ctx.commentsDeep := 0
 RETURN
