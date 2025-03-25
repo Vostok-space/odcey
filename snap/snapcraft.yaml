@@ -1,4 +1,5 @@
 name: odcey
+#base: core18
 base: bare
 build-base: core22
 adopt-info: odcey
@@ -12,36 +13,26 @@ description: |
 grade: stable
 confinement: strict
 
-architectures:
-  - build-on: [amd64]
-  - build-on: [riscv64]
-  - build-on: [arm64]
-  - build-on: [armhf]
-  - build-on: [s390x]
-  - build-on: [ppc64el]
-
 parts:
   odcey:
     plugin: nil
     build-snaps:
-      - vostok/latest/edge
+      - vostok/latest/beta
     build-packages:
-      - on amd64 to riscv64:
-        - gcc-riscv64-linux-gnu
-        - libc6-dev-riscv64-cross
-      - else:
+      - on !i386:
         - musl-tools
 
     override-build: |
       snap alias vostok ost
-      if [ "${SNAPCRAFT_TARGET_ARCH}" = riscv64 ]; then
-        CC=riscv64-linux-gnu-gcc
+      if [ "${SNAPCRAFT_TARGET_ARCH}" = i386 ]; then
+        CC="gcc -O2 -flto"
+        snapcraftctl set-version $(ost run odcey.Cli -m . -- version)
       else
-        CC=musl-gcc
+        CC="musl-gcc -Os -flto=auto -static"
+        craftctl set version=$(./odcey.mod Cli version)
       fi
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/bin
-      ost to-bin odcey.Cli $SNAPCRAFT_PART_INSTALL/usr/bin/odcey -m . -cc "$CC -Os -flto -s -static"
-      craftctl set version=$(./odcey.mod Cli version)
+      ost to-bin odcey.Cli $SNAPCRAFT_PART_INSTALL/usr/bin/odcey -m . -cc "$CC -s"
 
     source:
       .
