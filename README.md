@@ -1,26 +1,30 @@
 # odcey
 Command-line tool for .odc format, used by BlackBox Component Builder
-Provides converting to plain text.
+Provides converting to plain UTF-8 text.
 
 ## Usage
     odcey text  [input [output]] { options }
     odcey git   [dir]
+    odcey mc
 
 Command 'text' prints text content of .odc; empty arguments for standard IO
 
     -commander-to <str>  allows in output replacing DevCommanders.StdView by the argument
     -skip-embedded-view  skips recursive writing of embedded views
     -skip-comment        skips (* Oberon comments *)
+    -input-windows1251   set input charset Windows-1251 instead of Latin-1
     -tab <str>           set tabulation replacement
 
-Command 'git' embeds to git repo as text converter, what equal to commands:
+Command 'git' embeds odcey to git repo as text converter, what equal to commands:
 
     echo '*.odc diff=cp' >> .git/info/attributes
     echo '[diff "cp"]
     	binary = true
     	textconv = odcey text <' >> .git/config
 
-### Midnight Commander integration
+Command 'mc' embeds odcey to the Midnight Commander configuration as a text converter
+
+### Midnight Commander (old versions) integration
 Add to ~/.config/mc/mc.ext
 
     #odc BlackBox Component Builder container document
@@ -28,6 +32,9 @@ Add to ~/.config/mc/mc.ext
     View=%view{ascii} odcey text < %f
 
 ## Install
+    # Add deb-repo (https://wiki.oberon.org/repo) to the system, then
+    /usr/bin/sudo  apt install odcey
+    # or
     /usr/bin/sudo snap install odcey
     # or
     brew tap vostok-space/oberon &&
