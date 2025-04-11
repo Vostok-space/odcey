@@ -32,14 +32,28 @@ Add to ~/.config/mc/mc.ext
     View=%view{ascii} odcey text < %f
 
 ## Install
+
+### GNU/Linux
     # Add deb-repo (https://wiki.oberon.org/repo) to the system, then
     /usr/bin/sudo  apt install odcey
     # or
     /usr/bin/sudo snap install odcey
-    # or
+
+### GNU/Linux and macOS
     brew tap vostok-space/oberon &&
     brew install odcey
-    # or
+
+### Windows
+Download odcey.exe (or odcey_i386.exe) and copy it to the appropriate directory
+specified in the PATH variable.
+
+Example for powershell:
+
+    $edir = "$env:USERPROFILE\Executables"; mkdir "$edir"
+    Invoke-WebRequest -Uri https://github.com/Vostok-space/odcey/releases/download/v0.2/odcey.exe -OutFile "$edir\odcey.exe"
+    [Environment]::SetEnvironmentVariable('PATH', "$env:PATH;$edir", 'User')
+
+### GNU/Linux, macOS, Windows
     /usr/bin/sudo npm install --global odcey
 
 ## Build
