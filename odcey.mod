@@ -27,7 +27,8 @@ IMPORT
   VDefaultIO,
   OsEnv,
   Charz,
-  Utf8, Windows1251 := OldCharsetWindows1251;
+  Utf8, Windows1251 := OldCharsetWindows1251,
+  Platform;
 
 CONST
   Version* = "0.2";
@@ -182,7 +183,8 @@ BEGIN
            & Charz.PutChar   (str, len, Utf8.NewLine)
            & Charz.CopyString(str, len, "	binary = true")
            & Charz.PutChar   (str, len, Utf8.NewLine)
-           & Charz.CopyString(str, len, "	textconv = odcey text <")
+           & Charz.CopyString(str, len, "	textconv = odcey text")
+           & (Platform.Windows OR Charz.CopyString(str, len, " <"))
            & Charz.PutChar   (str, len, Utf8.NewLine));
       ok := len = Stream.WriteChars(config^, str, 0, len);
       IF ~ok THEN
