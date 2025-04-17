@@ -54,7 +54,8 @@ Example for powershell:
     [Environment]::SetEnvironmentVariable('PATH', "$env:PATH;$edir", 'User')
 
 ### GNU/Linux, macOS, Windows
-    /usr/bin/sudo npm install --global odcey
+    # with administrator rights
+    npm install --global odcey
 
 ## Build
     # install vostok-translator if it still absent through snap
