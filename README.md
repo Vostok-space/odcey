@@ -64,3 +64,14 @@ Example for powershell:
     brew tap vostok-space/oberon && brew install vostok
     # then build
     ost to-bin odcey.Cli odcey -m . -cc 'cc -O1 -s'
+
+Build both vostok and odcey from scratch by multiline POSIX shell command:
+
+    gcl () { git clone https://github.com/Vostok-space/$1.git --depth 1; } &&
+    gcl vostok && gcl odcey &&
+
+    cd vostok && ./init.sh &&
+    result/bs-ost run 'make.Build; make.Self' -infr . -m source &&
+
+    result/ost to-bin odcey.Cli result/odcey -infr . -m ../odcey &&
+    result/odcey help

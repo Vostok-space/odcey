@@ -376,7 +376,7 @@ BEGIN
       len := 0;
       ASSERT(CLI.Get(args[0], len, 1));
       len := Charz.Trim(args[0], 0);
-      ok := AddToGit(args[0]);
+      ok := AddToGit(args[0])
     ELSE
       ok := FALSE;
       log.sn("Too many arguments for command 'git'")
