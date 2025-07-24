@@ -44,7 +44,7 @@ Source: https://github.com/vostok-space/odcey
 
 Files: *
 Copyright: 2025 comdivbyzero
-License: GPL-3+
+License: LGPL-3
 EOF
 
 cat > "${DEB_DIR}/usr/share/doc/odcey/changelog" <<EOF
