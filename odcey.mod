@@ -48,7 +48,8 @@ BEGIN
   log.sn("Usage:");
   IF cli THEN
     log.sn(" 0. odcey text  [input [output]] { options }"); log.n;
-    log.sn(" 1. odcey git   [dir]");
+    log.sn("    odcey [text] input [output] { options }"); log.n;
+    log.sn(" 1. odcey git    [dir]");
     log.sn(" 2. odcey mc");
     commanderTo  := "-commander-to <str>";
     skipEmbedded := "-skip-embedded-view";
@@ -334,6 +335,7 @@ VAR
 BEGIN
   ok := TRUE;
   len := 0;
+  i := 0;
   IF (CLI.count = 0) OR ~CLI.Get(args[0], len, 0) THEN
     ok := FALSE;
     Help(TRUE)
@@ -341,10 +343,12 @@ BEGIN
     Help(TRUE)
   ELSIF args[0] = "version" THEN
     log.sn(Version)
-  ELSIF args[0] = "text" THEN
-    args[0] := "";
+  ELSIF (args[0] = "text") OR (Charz.SearchChar(args[0], i, ".")) THEN
+    i := ORD(args[0] = "text");
+    IF i = 1 THEN
+      args[0] := ""
+    END;
     args[1] := "";
-    i := 1;
     argInd := 0;
     tabOpt := "";
     WHILE ok & (i < CLI.count) DO
