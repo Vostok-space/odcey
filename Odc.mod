@@ -634,7 +634,7 @@ VAR code: INTEGER;
 BEGIN
   IF Utf8.CarRet = char THEN
     code := ORD(Utf8.NewLine)
-  ELSIF (BlackboxReplacementMin > char) OR (char < BlackboxReplacementMax) THEN
+  ELSIF (BlackboxReplacementMin > char) OR (char > BlackboxReplacementMax) THEN
     code := ORD(char)
   ELSIF SpaceZeroWidth = char THEN
     code := CodeSpaceZeroWidth
