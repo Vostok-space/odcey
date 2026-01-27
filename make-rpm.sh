@@ -35,7 +35,7 @@ Version:        ${VERSION}
 Release:        0%{?dist}
 Summary:        Converter of Blackbox .odc to UTF-8
 
-License:        LGPLv3
+License:        Apache-2.0
 URL:            https://github.com/vostok-space/odcey
 Source0:        %{name}-%{version}.tar.gz
 
@@ -49,8 +49,8 @@ into human-readable UTF-8 text format.
 %setup -q
 
 %build
-CC="cc -O2 -flto=auto -s"
-ost to-bin odcey.Cli odcey -m . -cc "$CC" || $CC pregen/*.c -Ipregen -o odcey
+%define CCC cc -O2 -flto=auto -s -Wl,--build-id
+ost to-bin odcey.Cli odcey -m . -cc "%{CCC}" || %{CCC} pregen/*.c -Ipregen -o odcey
 
 %install
 mkdir -p %{buildroot}/usr/bin
@@ -62,7 +62,10 @@ install -m 0755 odcey %{buildroot}/usr/bin/odcey
 /usr/bin/odcey
 
 %changelog
-* Thu Jul 24 2025 ${MAINTAINER} - ${VERSION}
+* Tue Jan 27 2026 ${MAINTAINER} - 0.3
+- Fixed correction of characters SHORTCHAR, specific to Blackbox, in Utf-8
+
+* Thu Jul 24 2025 ${MAINTAINER} - 0.2
 - Initial package
 EOF
 

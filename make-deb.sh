@@ -43,12 +43,18 @@ Upstream-Name: odcey
 Source: https://github.com/vostok-space/odcey
 
 Files: *
-Copyright: 2025 comdivbyzero
-License: LGPL-3
+Copyright: 2025-2026 comdivbyzero
+License: Apache-2.0
 EOF
 
 cat > "${DEB_DIR}/usr/share/doc/odcey/changelog" <<EOF
-odcey (${VERSION}) stable; urgency=low
+odcey (0.3) stable; urgency=low
+
+  * Fixed correction of characters SHORTCHAR, specific to Blackbox, in Utf-8
+
+ -- ${MAINTAINER_0}  Tue, 27 Jan 2026 00:00:00 +0200
+
+odcey (0.2) stable; urgency=low
 
   * Initial package
 

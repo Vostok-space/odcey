@@ -31,7 +31,7 @@ IMPORT
   Platform;
 
 CONST
-  Version* = "0.2";
+  Version* = "0.3";
 
   McConfig = ".config/mc/mc.ext.ini";
   McConfigBackup = ".config/mc/mc.ext.ini~";
