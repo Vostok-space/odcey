@@ -445,7 +445,7 @@ VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
         ok := (rest >= 0)
             & PieceViewNew(curr)
             & ReadView(in, types, block, next, size, metaSize, curr.view);
-        DEC(metaSize, size)
+        IF ok THEN DEC(metaSize, size) END
       ELSE
         DEC(rest, ABS(textLen));
         ok := (rest >= 0)
