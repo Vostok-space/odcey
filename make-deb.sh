@@ -48,8 +48,15 @@ License: Apache-2.0
 EOF
 
 cat > "${DEB_DIR}/usr/share/doc/odcey/changelog" <<EOF
+odcey (0.3.1) stable; urgency=low
+
+  * Fixed excess memory allocation
+
+ -- ${MAINTAINER_0}  Sun, 1 Feb 2026 00:00:00 +0200
+
 odcey (0.3) stable; urgency=low
 
+  * Command «text» has become optional
   * Fixed correction of characters SHORTCHAR, specific to Blackbox, in Utf-8
 
  -- ${MAINTAINER_0}  Tue, 27 Jan 2026 00:00:00 +0200

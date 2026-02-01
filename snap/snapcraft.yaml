@@ -1,7 +1,6 @@
 name: odcey
-#base: core18
 base: bare
-build-base: core22
+build-base: core24
 adopt-info: odcey
 license: Apache-2.0
 summary: Text converter of ".odc"-format from BlackBox Component Builder
@@ -19,18 +18,12 @@ parts:
     build-snaps:
       - vostok/latest/beta
     build-packages:
-      - on !i386:
-        - musl-tools
+      - musl-tools
 
     override-build: |
       snap alias vostok ost
-      if [ "${SNAPCRAFT_TARGET_ARCH}" = i386 ]; then
-        CC="gcc -O2 -flto"
-        snapcraftctl set-version $(ost run odcey.Cli -m . -- version)
-      else
-        CC="musl-gcc -Os -flto=auto -static"
-        craftctl set version=$(./odcey.mod Cli version)
-      fi
+      CC="musl-gcc -Os -flto=auto -static"
+      craftctl set version=$(./odcey.mod Cli version)
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/bin
       ost to-bin odcey.Cli $SNAPCRAFT_PART_INSTALL/usr/bin/odcey -m . -cc "$CC -s"
 

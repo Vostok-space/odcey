@@ -62,7 +62,11 @@ install -m 0755 odcey %{buildroot}/usr/bin/odcey
 /usr/bin/odcey
 
 %changelog
+$ Sun 1 Feb 2026 ${MAINTAINER} - 0.3.1
+- Fixed excess memory allocation
+
 * Tue Jan 27 2026 ${MAINTAINER} - 0.3
+- Command «text» has become optional
 - Fixed correction of characters SHORTCHAR, specific to Blackbox, in Utf-8
 
 * Thu Jul 24 2025 ${MAINTAINER} - 0.2
