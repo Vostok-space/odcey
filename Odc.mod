@@ -184,11 +184,12 @@ BEGIN
     p.ofs := b.used;
 
     IF size >= LEN(b.data) - b.used THEN
+      DEC(size, LEN(b.data) - b.used);
       b.used := LEN(b.data)
     ELSE
-      INC(b.used, (LEN(b.data) - b.used))
+      INC(b.used, size);
+      size := 0
     END;
-    DEC(size, LEN(b.data) - b.used);
 
     WHILE ok & (size >= LEN(b.data)) DO
       ok := BlockNew(b.next);
