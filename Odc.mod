@@ -743,7 +743,7 @@ BEGIN
     ps := ps.next
   END
 RETURN
-  ps = NIL
+  ok
 END WritePieces;
 
 PROCEDURE WriteObject(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
