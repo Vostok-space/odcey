@@ -15,12 +15,11 @@ Command 'text' prints text content of .odc; empty arguments for standard IO
     -input-windows1251   set input charset Windows-1251 instead of Latin-1
     -tab <str>           set tabulation replacement
 
-Command 'git' embeds odcey to git repo as text converter, what equal to commands:
+Command 'git' embeds odcey to git repo as a text converter, what equal to commands:
 
     echo '*.odc diff=cp' >> .git/info/attributes
-    echo '[diff "cp"]
-    	binary = true
-    	textconv = odcey text <' >> .git/config
+    git config diff.cp.binary   true
+    git config diff.cp.textconv 'odcey text <'
 
 Command 'mc' embeds odcey to the Midnight Commander configuration as a text converter
 

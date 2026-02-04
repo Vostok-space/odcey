@@ -1,6 +1,6 @@
 #!/usr/bin/env -S ost .
 
-Copyright 2022-2025 ComdivByZero
+Copyright 2022-2026 ComdivByZero
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,13 +25,13 @@ IMPORT
   File := VFileStream,
   Copy := VCopy,
   VDefaultIO,
-  OsEnv,
+  OsEnv, OsExec,
   Charz,
   Utf8, Windows1251 := OldCharsetWindows1251,
   Platform;
 
 CONST
-  Version* = "0.3.1";
+  Version* = "0.3.2";
 
   McConfig = ".config/mc/mc.ext.ini";
   McConfigBackup = ".config/mc/mc.ext.ini~";
@@ -174,22 +174,10 @@ BEGIN
     IF ~ok THEN
       log.sn("Can not edit .git/info/attributes")
     ELSE
-      len := 0;
-      ASSERT(Charz.PutChar   (str, len, Utf8.NewLine)
-           & Charz.CopyString(str, len, "[diff ")
-           & Charz.PutChar   (str, len, Utf8.DQuote)
-           & Charz.CopyString(str, len, "cp")
-           & Charz.PutChar   (str, len, Utf8.DQuote)
-           & Charz.PutChar   (str, len, "]")
-           & Charz.PutChar   (str, len, Utf8.NewLine)
-           & Charz.CopyString(str, len, "	binary = true")
-           & Charz.PutChar   (str, len, Utf8.NewLine)
-           & Charz.CopyString(str, len, "	textconv = odcey text")
-           & (Platform.Windows OR Charz.CopyString(str, len, " <"))
-           & Charz.PutChar   (str, len, Utf8.NewLine));
-      ok := len = Stream.WriteChars(config^, str, 0, len);
+      ok := (OsExec.Do("git config diff.cp.binary true") = 0)
+          & (OsExec.Do("git config diff.cp.textconv 'odcey text <'") = 0);
       IF ~ok THEN
-        log.sn("Can not edit .git/config")
+        log.sn("Can not setup git textconv")
       END
     END
   END;
