@@ -196,13 +196,14 @@ RETURN
 END Rename;
 
 PROCEDURE AddToMc(): BOOLEAN;
-VAR ok: BOOLEAN; config: File.Out; old: File.In; home, str: ARRAY 100H OF CHAR; len: INTEGER;
+VAR ok, oldOk: BOOLEAN; config: File.Out; old: File.In; home, str: ARRAY 100H OF CHAR; len: INTEGER;
 BEGIN
   len := 0;
   ok := OsEnv.Get(home, len, "HOME");
   IF ok THEN
     config := Open(home, McConfigNew);
     old := OpenIn(home, McConfig);
+    oldOk := old # NIL;
     ok := (config # NIL);
     IF ok THEN
       len := 0;
@@ -216,14 +217,14 @@ BEGIN
            & Charz.PutChar   (str, len, Utf8.NewLine)
            & Charz.PutChar   (str, len, Utf8.NewLine));
       ok := (len = Stream.WriteChars(config^, str, 0, len));
-      IF ok THEN
+      IF ok & oldOk THEN
         Copy.UntilEnd(old^, config^) (* TODO *)
       END
     END;
     File.CloseIn(old);
     File.CloseOut(config);
     IF ok THEN
-      ok := Rename(home, McConfig, McConfigBackup)
+      ok := (~oldOk OR Rename(home, McConfig, McConfigBackup))
           & Rename(home, McConfigNew, McConfig)
     END
   END
