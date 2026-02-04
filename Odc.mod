@@ -74,6 +74,7 @@ CONST
 TYPE
   Options* = RECORD
     commanderReplacement*: ARRAY 64 OF CHAR;
+    cmdLen: INTEGER;
     tab*: ARRAY 16 OF CHAR;
     tabLen: INTEGER;
     set*: SET
@@ -721,17 +722,16 @@ RETURN
 END WritePiece;
 
 PROCEDURE WritePieces(VAR out: Stream.Out; VAR ctx: PrintContext; ps: PPiece; types: Types): BOOLEAN;
-VAR ok: BOOLEAN; len: INTEGER;
+VAR ok: BOOLEAN;
 BEGIN
   ok := TRUE;
   WHILE (ps # NIL) & ok DO
     IF ps.kind = PieceView THEN
-      IF (ctx.opt.commanderReplacement # "")
+      IF (ctx.opt.cmdLen > 0)
        & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
       THEN
-        len := Charz.CalcLen(ctx.opt.commanderReplacement, 0);
-        ok := IsNeedPrint(ctx)
-           OR (len = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, len))
+        ok := ~IsNeedPrint(ctx)
+           OR (ctx.opt.cmdLen = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, ctx.opt.cmdLen))
       ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
         ok := writeObject(out, ctx, types, ps.view)
       ELSIF IsNeedPrint(ctx) THEN
@@ -777,6 +777,7 @@ BEGIN
   ASSERT(opt.set - {0 .. LastOption} = {});
 
   ctx.opt := opt;
+  ctx.opt.cmdLen := Charz.CalcLen(opt.commanderReplacement, 0);
   ctx.opt.tabLen := Charz.CalcLen(opt.tab, 0);
   ctx.prevChar := -1;
   ctx.commentsDeep := 0
