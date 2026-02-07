@@ -353,10 +353,10 @@ PROCEDURE ReadView(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
 VAR width, height: INTEGER; ok: BOOLEAN; struct: Struct;
 BEGIN
   size := 0;
-  ok := (rest > 0)
+  ok := (rest > 8)
       & Read.LeUinteger(in, width)
       & Read.LeUinteger(in, height)
-      & readStruct(in, types, block, next, size, rest, struct);
+      & readStruct(in, types, block, next, size, rest - 8, struct);
   IF ok THEN
     INC(size, 8);
     obj := struct.object
