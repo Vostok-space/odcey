@@ -267,16 +267,17 @@ RETURN
 & ((next > 0) OR ~ODD(comment))
 END ReadMidNext;
 
+PROCEDURE SetBase(VAR types: Types; prev, id: INTEGER);
+BEGIN
+  IF prev >= 0 THEN
+    types.desc[prev].base := id
+  ELSE
+    types.currentDesc := id
+  END
+END SetBase;
+
 PROCEDURE ReadPath(VAR in: Stream.In; VAR types: Types; VAR size: INTEGER; rest: INTEGER): BOOLEAN;
 VAR id: BYTE; ok, ignore: BOOLEAN; tid, prev, s: INTEGER;
-  PROCEDURE SetBase(VAR types: Types; prev, id: INTEGER);
-  BEGIN
-    IF prev >= 0 THEN
-      types.desc[prev].base := id
-    ELSE
-      types.currentDesc := id
-    END
-  END SetBase;
 
   PROCEDURE Identify(VAR typeIndex: INTEGER; types: Types; name: ARRAY OF CHAR): BOOLEAN;
   VAR match: BOOLEAN;
@@ -289,28 +290,36 @@ VAR id: BYTE; ok, ignore: BOOLEAN; tid, prev, s: INTEGER;
   RETURN
     match
   END Identify;
+
+  PROCEDURE ReadBase(VAR in: Stream.In; VAR size: INTEGER; VAR types: Types; VAR prev: INTEGER): BOOLEAN;
+  VAR ok: BOOLEAN;
+  BEGIN
+    SetBase(types, prev, types.top);
+    prev := types.top; INC(types.top);
+    ok := (types.top < LEN(types.desc))
+        & (types.desc[prev].name < LEN(types.names) - TypeNameLen - 2);
+    IF ok THEN
+      types.desc[types.top].name := types.desc[prev].name;
+      ok := 0X = Read.UntilChar(in, 0X, TypeNameLen + 1, types.names, types.desc[types.top].name);
+      INC(size, types.desc[types.top].name - types.desc[prev].name)
+    END
+  RETURN
+    ok
+  END ReadBase;
 BEGIN
   prev := -1;
   ok := Read.Byte(in, id);
   s := 1;
   WHILE ok & (id = NewExt) DO
-    SetBase(types, prev, types.top);
-    prev := types.top; INC(types.top);
-    types.desc[types.top].name := types.desc[prev].name;
-    ok := (types.desc[types.top].name < LEN(types.names) - TypeNameLen - 2)
-        & (Read.UntilChar(in, 0X, TypeNameLen + 1, types.names, types.desc[types.top].name) = 0X)
+    ok := ReadBase(in, s, types, prev)
         & Read.Byte(in, id);
-    INC(s, 1 + types.desc[types.top].name - types.desc[prev].name)
+    IF ok THEN INC(s, 1) END
   END;
   tid := -1;
   IF ~ok THEN
     ;
   ELSIF id = NewBase THEN
-    SetBase(types, prev, types.top);
-    INC(types.top);
-    types.desc[types.top].name := types.desc[types.top - 1].name;
-    ok := Read.UntilChar(in, 0X, TypeNameLen + 1, types.names, types.desc[types.top].name) = 0X;
-    INC(s, types.desc[types.top].name - types.desc[types.top - 1].name)
+    ok := ReadBase(in, s, types, prev)
   ELSE
     ok := (id = OldType) & Read.LeUinteger(in, tid) & (tid < types.top);
     INC(s, 4);
