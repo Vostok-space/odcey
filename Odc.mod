@@ -424,176 +424,176 @@ PROCEDURE ReadStruct(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
                      VAR struct: Struct): BOOLEAN;
 VAR id: BYTE; ok: BOOLEAN;
 
-PROCEDURE ReadObject(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+  PROCEDURE ReadObject(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                       VAR next, size: INTEGER; rest: INTEGER;
+                       VAR obj: PObject): BOOLEAN;
+  VAR ok: BOOLEAN; pathSize, begin, content: INTEGER;
+
+    PROCEDURE ReadStdModel(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                           rest: INTEGER; VAR obj: PObject): BOOLEAN;
+    VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
+
+      PROCEDURE ReadMeta(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                         VAR ps: PPiece;
+                         metaSize, rest: INTEGER): BOOLEAN;
+      CONST AttrEnd = 0FFH;
+      VAR ok: BOOLEAN; last, curr: PPiece;
+          textLen, attrTop, next, size: INTEGER; attrNum: BYTE; struct: Struct;
+
+        PROCEDURE ReadView(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
                      VAR next, size: INTEGER; rest: INTEGER;
                      VAR obj: PObject): BOOLEAN;
-VAR ok: BOOLEAN; pathSize, begin, content: INTEGER;
+        VAR width, height: INTEGER; ok: BOOLEAN; struct: Struct;
+        BEGIN
+          size := 0;
+          ok := (rest > 8)
+              & Read.LeUinteger(in, width)
+              & Read.LeUinteger(in, height)
+              & ReadStruct(in, types, block, next, size, rest - 8, struct);
+          IF ok THEN
+            INC(size, 8);
+            obj := struct.object
+          END
+        RETURN
+          ok
+        END ReadView;
+      BEGIN
+        last := NIL;
 
-PROCEDURE ReadStdModel(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                       rest: INTEGER; VAR obj: PObject): BOOLEAN;
-VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
+        attrTop := 0;
 
-  PROCEDURE ReadMeta(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                     VAR ps: PPiece;
-                     metaSize, rest: INTEGER): BOOLEAN;
-  CONST AttrEnd = 0FFH;
-  VAR ok: BOOLEAN; last, curr: PPiece;
-      textLen, attrTop, next, size: INTEGER; attrNum: BYTE; struct: Struct;
+        ok := Read.Byte(in, attrNum) & ((attrNum < 80H) OR (attrNum = AttrEnd));
+        WHILE ok & (attrNum <= attrTop) DO
+          DEC(metaSize, 5);
+          IF attrNum = attrTop THEN
+            ok := ReadStruct(in, types, block, next, size, metaSize, struct);
+            DEC(metaSize, size);
+            INC(attrTop)
+          END;
+          ok := ok & (metaSize > 0) & Read.LeInteger(in, textLen);
+          IF ~ok THEN
+            ;
+          ELSIF textLen = 0 THEN
+            DEC(rest);
+            ok := (rest >= 0)
+                & PieceViewNew(curr)
+                & ReadView(in, types, block, next, size, metaSize, curr.view);
+            IF ok THEN DEC(metaSize, size) END
+          ELSE
+            DEC(rest, ABS(textLen));
+            ok := (rest >= 0)
+                & PieceNew(block, ABS(textLen), PieceChar1 + ORD(textLen < 0), curr)
+          END;
+          IF ~ok THEN
+            ;
+          ELSIF last # NIL THEN
+            last.next := curr
+          ELSE
+            ps := curr
+          END;
+          last := curr;
+          ok := ok & Read.Byte(in, attrNum)
+        END;
+        ok := ok & (attrNum = AttrEnd) & (metaSize = 1) & (rest = 0)
+      RETURN
+        ok
+      END ReadMeta;
 
-    PROCEDURE ReadView(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                 VAR next, size: INTEGER; rest: INTEGER;
-                 VAR obj: PObject): BOOLEAN;
-    VAR width, height: INTEGER; ok: BOOLEAN; struct: Struct;
     BEGIN
-      size := 0;
-      ok := (rest > 8)
-          & Read.LeUinteger(in, width)
-          & Read.LeUinteger(in, height)
-          & ReadStruct(in, types, block, next, size, rest - 8, struct);
-      IF ok THEN
-        INC(size, 8);
-        obj := struct.object
+      DEC(rest, 10);
+      txt := NIL;
+      ok := (rest > 0)
+          & TextNew(txt, types)
+
+          & Read.Skip(in, 6)
+          & Read.LeUinteger(in, metaSize) & (metaSize <= rest)
+
+          & ReadMeta(in, types, block, txt.pieces, metaSize, rest - metaSize)
+          & ReadPieces(in, txt.pieces);
+      obj := txt
+    RETURN
+      ok
+    END ReadStdModel;
+
+    PROCEDURE ReadAny(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                      begin, rest: INTEGER;
+                      VAR obj: PObject): BOOLEAN;
+    VAR ok: BOOLEAN;
+
+      PROCEDURE ReadItem(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                         VAR begin, rest: INTEGER;
+                         VAR struct: PStruct): BOOLEAN;
+      VAR ok: BOOLEAN; size: INTEGER;
+      BEGIN
+        NEW(struct);
+        DEC(rest, begin);
+        size := 0;
+        ok := (struct # NIL)
+            & (   (begin = 0)
+               OR PieceNew(block, begin, PieceChar1, struct.data)
+                & ReadPieces(in, struct.data)
+              )
+            & ReadStruct(in, types, block, begin, size, rest, struct^);
+        DEC(rest, size)
+      RETURN
+        ok
+      END ReadItem;
+    BEGIN
+      ok := ObjNew(obj, types.currentDesc);
+      IF ~ok THEN
+        ;
+      ELSIF begin >= 0 THEN
+        ok := ReadItem(in, types, block, begin, rest, obj.first);
+        obj.last := obj.first;
+        WHILE ok & (begin >= 0) DO
+          ok := ReadItem(in, types, block, begin, rest, obj.last.next);
+          obj.last := obj.last.next
+        END;
+        IF ok & (rest > 0) THEN
+          ok := ReadData(in, block, rest, obj.last.next);
+          IF ok THEN
+            obj.last := obj.last.next;
+            obj.last.next := NIL
+          END
+        END
+      ELSE
+        ok := ReadData(in, block, rest, obj.first);
+        IF ok THEN
+          obj.last := obj.first;
+          obj.last.next := NIL
+        END
       END
     RETURN
       ok
-    END ReadView;
+    END ReadAny;
+
   BEGIN
-    last := NIL;
+    ok := ReadPath(in, types, pathSize, rest)
+        & (16 <= (rest - pathSize))
 
-    attrTop := 0;
+        & ReadMidNext(in, next)
 
-    ok := Read.Byte(in, attrNum) & ((attrNum < 80H) OR (attrNum = AttrEnd));
-    WHILE ok & (attrNum <= attrTop) DO
-      DEC(metaSize, 5);
-      IF attrNum = attrTop THEN
-        ok := ReadStruct(in, types, block, next, size, metaSize, struct);
-        DEC(metaSize, size);
-        INC(attrTop)
-      END;
-      ok := ok & (metaSize > 0) & Read.LeInteger(in, textLen);
-      IF ~ok THEN
-        ;
-      ELSIF textLen = 0 THEN
-        DEC(rest);
-        ok := (rest >= 0)
-            & PieceViewNew(curr)
-            & ReadView(in, types, block, next, size, metaSize, curr.view);
-        IF ok THEN DEC(metaSize, size) END
+        & Read.LeUinteger(in, begin)
+        & ((begin = 0) OR (begin >= 4))
+
+        & Read.LeUinteger(in, content)
+        & ((next = 0) OR (next >= 8) & (content <= next - 8))
+        & (content > begin - 4) & (content <= rest - 16 - pathSize);
+    IF ~ok THEN
+      size := 0
+    ELSE
+      size := pathSize + content + 16;
+      next := next - 8 - content;
+
+      IF types.currentDesc = types.textModelsStdModel THEN
+        ok := ReadStdModel(in, types, block, content, obj)
       ELSE
-        DEC(rest, ABS(textLen));
-        ok := (rest >= 0)
-            & PieceNew(block, ABS(textLen), PieceChar1 + ORD(textLen < 0), curr)
-      END;
-      IF ~ok THEN
-        ;
-      ELSIF last # NIL THEN
-        last.next := curr
-      ELSE
-        ps := curr
-      END;
-      last := curr;
-      ok := ok & Read.Byte(in, attrNum)
-    END;
-    ok := ok & (attrNum = AttrEnd) & (metaSize = 1) & (rest = 0)
-  RETURN
-    ok
-  END ReadMeta;
-
-BEGIN
-  DEC(rest, 10);
-  txt := NIL;
-  ok := (rest > 0)
-      & TextNew(txt, types)
-
-      & Read.Skip(in, 6)
-      & Read.LeUinteger(in, metaSize) & (metaSize <= rest)
-
-      & ReadMeta(in, types, block, txt.pieces, metaSize, rest - metaSize)
-      & ReadPieces(in, txt.pieces);
-  obj := txt
-RETURN
-  ok
-END ReadStdModel;
-
-PROCEDURE ReadAny(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                  begin, rest: INTEGER;
-                  VAR obj: PObject): BOOLEAN;
-VAR ok: BOOLEAN;
-
-  PROCEDURE ReadItem(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                     VAR begin, rest: INTEGER;
-                     VAR struct: PStruct): BOOLEAN;
-  VAR ok: BOOLEAN; size: INTEGER;
-  BEGIN
-    NEW(struct);
-    DEC(rest, begin);
-    size := 0;
-    ok := (struct # NIL)
-        & (   (begin = 0)
-           OR PieceNew(block, begin, PieceChar1, struct.data)
-            & ReadPieces(in, struct.data)
-          )
-        & ReadStruct(in, types, block, begin, size, rest, struct^);
-    DEC(rest, size)
-  RETURN
-    ok
-  END ReadItem;
-BEGIN
-  ok := ObjNew(obj, types.currentDesc);
-  IF ~ok THEN
-    ;
-  ELSIF begin >= 0 THEN
-    ok := ReadItem(in, types, block, begin, rest, obj.first);
-    obj.last := obj.first;
-    WHILE ok & (begin >= 0) DO
-      ok := ReadItem(in, types, block, begin, rest, obj.last.next);
-      obj.last := obj.last.next
-    END;
-    IF ok & (rest > 0) THEN
-      ok := ReadData(in, block, rest, obj.last.next);
-      IF ok THEN
-        obj.last := obj.last.next;
-        obj.last.next := NIL
+        ok := ReadAny(in, types, block, begin - 4, content, obj)
       END
     END
-  ELSE
-    ok := ReadData(in, block, rest, obj.first);
-    IF ok THEN
-      obj.last := obj.first;
-      obj.last.next := NIL
-    END
-  END
-RETURN
-  ok
-END ReadAny;
-
-BEGIN
-  ok := ReadPath(in, types, pathSize, rest)
-      & (16 <= (rest - pathSize))
-
-      & ReadMidNext(in, next)
-
-      & Read.LeUinteger(in, begin)
-      & ((begin = 0) OR (begin >= 4))
-
-      & Read.LeUinteger(in, content)
-      & ((next = 0) OR (next >= 8) & (content <= next - 8))
-      & (content > begin - 4) & (content <= rest - 16 - pathSize);
-  IF ~ok THEN
-    size := 0
-  ELSE
-    size := pathSize + content + 16;
-    next := next - 8 - content;
-
-    IF types.currentDesc = types.textModelsStdModel THEN
-      ok := ReadStdModel(in, types, block, content, obj)
-    ELSE
-      ok := ReadAny(in, types, block, begin - 4, content, obj)
-    END
-  END
-RETURN
-  ok
-END ReadObject;
+  RETURN
+    ok
+  END ReadObject;
 
 BEGIN
   ok := (rest > 0) & Read.Byte(in, id);
