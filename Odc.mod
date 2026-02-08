@@ -727,34 +727,33 @@ RETURN
   ok
 END WritePiece;
 
-
 PROCEDURE WriteObject(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
 VAR ok: BOOLEAN; struct: PStruct;
 
-PROCEDURE WritePieces(VAR out: Stream.Out; VAR ctx: PrintContext; ps: PPiece; types: Types): BOOLEAN;
-VAR ok: BOOLEAN;
-BEGIN
-  ok := TRUE;
-  WHILE (ps # NIL) & ok DO
-    IF ps.kind = PieceView THEN
-      IF (ctx.opt.cmdLen > 0)
-       & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
-      THEN
-        ok := ~IsNeedPrint(ctx)
-           OR (ctx.opt.cmdLen = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, ctx.opt.cmdLen))
-      ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
-        ok := WriteObject(out, ctx, types, ps.view)
-      ELSIF IsNeedPrint(ctx) THEN
-        ok := 1 = Stream.WriteChars(out, " ", 0, 1)
-      END
-    ELSE
-      ok := WritePiece(out, ctx, ps^)
-    END;
-    ps := ps.next
-  END
-RETURN
-  ok
-END WritePieces;
+  PROCEDURE WritePieces(VAR out: Stream.Out; VAR ctx: PrintContext; ps: PPiece; types: Types): BOOLEAN;
+  VAR ok: BOOLEAN;
+  BEGIN
+    ok := TRUE;
+    WHILE (ps # NIL) & ok DO
+      IF ps.kind = PieceView THEN
+        IF (ctx.opt.cmdLen > 0)
+         & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
+        THEN
+          ok := ~IsNeedPrint(ctx)
+             OR (ctx.opt.cmdLen = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, ctx.opt.cmdLen))
+        ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
+          ok := WriteObject(out, ctx, types, ps.view)
+        ELSIF IsNeedPrint(ctx) THEN
+          ok := 1 = Stream.WriteChars(out, " ", 0, 1)
+        END
+      ELSE
+        ok := WritePiece(out, ctx, ps^)
+      END;
+      ps := ps.next
+    END
+  RETURN
+    ok
+  END WritePieces;
 
 BEGIN
   IF obj.type = types.textModelsStdModel THEN
