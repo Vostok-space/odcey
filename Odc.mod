@@ -144,9 +144,6 @@ TYPE
   END;
 
 VAR
-  readStruct: PROCEDURE(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                        VAR next, size: INTEGER; rest: INTEGER;
-                        VAR struct: Struct): BOOLEAN;
   writeObject: PROCEDURE(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
 
 PROCEDURE TypesInit(VAR t: Types);
@@ -347,23 +344,34 @@ RETURN
 & ReadEndNext(in, n)
 END ReadLink;
 
-PROCEDURE ReadView(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                   VAR next, size: INTEGER; rest: INTEGER;
-                   VAR obj: PObject): BOOLEAN;
-VAR width, height: INTEGER; ok: BOOLEAN; struct: Struct;
+PROCEDURE ObjInit(VAR obj: Object; type: INTEGER);
 BEGIN
-  size := 0;
-  ok := (rest > 8)
-      & Read.LeUinteger(in, width)
-      & Read.LeUinteger(in, height)
-      & readStruct(in, types, block, next, size, rest - 8, struct);
-  IF ok THEN
-    INC(size, 8);
-    obj := struct.object
+  ASSERT(type >= 0);
+
+  obj.type := type;
+  obj.first := NIL;
+  obj.last := NIL
+END ObjInit;
+
+PROCEDURE ObjNew(VAR obj: PObject; type: INTEGER): BOOLEAN;
+BEGIN
+  NEW(obj);
+  IF obj # NIL THEN
+    ObjInit(obj^, type)
   END
 RETURN
-  ok
-END ReadView;
+  obj # NIL
+END ObjNew;
+
+PROCEDURE TextNew(VAR obj: Text; types: Types): BOOLEAN;
+BEGIN
+  NEW(obj);
+  IF obj # NIL THEN
+    ObjInit(obj^, types.textModelsStdModel)
+  END
+RETURN
+  obj # NIL
+END TextNew;
 
 PROCEDURE ReadPieces(VAR in: Stream.In; p: PPiece): BOOLEAN;
 VAR ok: BOOLEAN; ofs, size: INTEGER; b: PBlock; viewcode: BYTE;
@@ -396,34 +404,30 @@ RETURN
   ok
 END ReadPieces;
 
-PROCEDURE ObjInit(VAR obj: Object; type: INTEGER);
+PROCEDURE ReadData(VAR in: Stream.In; VAR block: PBlock; size: INTEGER; VAR struct: PStruct): BOOLEAN;
+VAR ok: BOOLEAN;
 BEGIN
-  ASSERT(type >= 0);
-
-  obj.type := type;
-  obj.first := NIL;
-  obj.last := NIL
-END ObjInit;
-
-PROCEDURE ObjNew(VAR obj: PObject; type: INTEGER): BOOLEAN;
-BEGIN
-  NEW(obj);
-  IF obj # NIL THEN
-    ObjInit(obj^, type)
+  NEW(struct);
+  ok := (struct # NIL)
+      & PieceNew(block, size, PieceChar1, struct.data)
+      & ReadPieces(in, struct.data);
+  IF ok THEN
+    struct.kind := Data;
+    struct.object := NIL
   END
 RETURN
-  obj # NIL
-END ObjNew;
+  ok
+END ReadData;
 
-PROCEDURE TextNew(VAR obj: Text; types: Types): BOOLEAN;
-BEGIN
-  NEW(obj);
-  IF obj # NIL THEN
-    ObjInit(obj^, types.textModelsStdModel)
-  END
-RETURN
-  obj # NIL
-END TextNew;
+PROCEDURE ReadStruct(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                     VAR next, size: INTEGER; rest: INTEGER;
+                     VAR struct: Struct): BOOLEAN;
+VAR id: BYTE; ok: BOOLEAN;
+
+PROCEDURE ReadObject(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                     VAR next, size: INTEGER; rest: INTEGER;
+                     VAR obj: PObject): BOOLEAN;
+VAR ok: BOOLEAN; pathSize, begin, content: INTEGER;
 
 PROCEDURE ReadStdModel(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
                        rest: INTEGER; VAR obj: PObject): BOOLEAN;
@@ -435,6 +439,24 @@ VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
   CONST AttrEnd = 0FFH;
   VAR ok: BOOLEAN; last, curr: PPiece;
       textLen, attrTop, next, size: INTEGER; attrNum: BYTE; struct: Struct;
+
+    PROCEDURE ReadView(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
+                 VAR next, size: INTEGER; rest: INTEGER;
+                 VAR obj: PObject): BOOLEAN;
+    VAR width, height: INTEGER; ok: BOOLEAN; struct: Struct;
+    BEGIN
+      size := 0;
+      ok := (rest > 8)
+          & Read.LeUinteger(in, width)
+          & Read.LeUinteger(in, height)
+          & ReadStruct(in, types, block, next, size, rest - 8, struct);
+      IF ok THEN
+        INC(size, 8);
+        obj := struct.object
+      END
+    RETURN
+      ok
+    END ReadView;
   BEGIN
     last := NIL;
 
@@ -444,7 +466,7 @@ VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
     WHILE ok & (attrNum <= attrTop) DO
       DEC(metaSize, 5);
       IF attrNum = attrTop THEN
-        ok := readStruct(in, types, block, next, size, metaSize, struct);
+        ok := ReadStruct(in, types, block, next, size, metaSize, struct);
         DEC(metaSize, size);
         INC(attrTop)
       END;
@@ -476,6 +498,7 @@ VAR ok: BOOLEAN; metaSize: INTEGER; txt: Text;
   RETURN
     ok
   END ReadMeta;
+
 BEGIN
   DEC(rest, 10);
   txt := NIL;
@@ -491,21 +514,6 @@ BEGIN
 RETURN
   ok
 END ReadStdModel;
-
-PROCEDURE ReadData(VAR in: Stream.In; VAR block: PBlock; size: INTEGER; VAR struct: PStruct): BOOLEAN;
-VAR ok: BOOLEAN;
-BEGIN
-  NEW(struct);
-  ok := (struct # NIL)
-      & PieceNew(block, size, PieceChar1, struct.data)
-      & ReadPieces(in, struct.data);
-  IF ok THEN
-    struct.kind := Data;
-    struct.object := NIL
-  END
-RETURN
-  ok
-END ReadData;
 
 PROCEDURE ReadAny(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
                   begin, rest: INTEGER;
@@ -525,7 +533,7 @@ VAR ok: BOOLEAN;
            OR PieceNew(block, begin, PieceChar1, struct.data)
             & ReadPieces(in, struct.data)
           )
-        & readStruct(in, types, block, begin, size, rest, struct^);
+        & ReadStruct(in, types, block, begin, size, rest, struct^);
     DEC(rest, size)
   RETURN
     ok
@@ -559,10 +567,6 @@ RETURN
   ok
 END ReadAny;
 
-PROCEDURE ReadObject(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                     VAR next, size: INTEGER; rest: INTEGER;
-                     VAR obj: PObject): BOOLEAN;
-VAR ok: BOOLEAN; pathSize, begin, content: INTEGER;
 BEGIN
   ok := ReadPath(in, types, pathSize, rest)
       & (16 <= (rest - pathSize))
@@ -591,10 +595,6 @@ RETURN
   ok
 END ReadObject;
 
-PROCEDURE ReadStruct(VAR in: Stream.In; VAR types: Types; VAR block: PBlock;
-                     VAR next, size: INTEGER; rest: INTEGER;
-                     VAR struct: Struct): BOOLEAN;
-VAR id: BYTE; ok: BOOLEAN;
 BEGIN
   ok := (rest > 0) & Read.Byte(in, id);
   IF ~ok THEN
@@ -795,6 +795,5 @@ RETURN
 END PrintDoc;
 
 BEGIN
-  readStruct  := ReadStruct;
   writeObject := WriteObject
 END Odc.
