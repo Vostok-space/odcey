@@ -143,9 +143,6 @@ TYPE
     opt: Options
   END;
 
-VAR
-  writeObject: PROCEDURE(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
-
 PROCEDURE TypesInit(VAR t: Types);
 BEGIN
   t.top := 0;
@@ -730,6 +727,10 @@ RETURN
   ok
 END WritePiece;
 
+
+PROCEDURE WriteObject(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
+VAR ok: BOOLEAN; struct: PStruct;
+
 PROCEDURE WritePieces(VAR out: Stream.Out; VAR ctx: PrintContext; ps: PPiece; types: Types): BOOLEAN;
 VAR ok: BOOLEAN;
 BEGIN
@@ -742,7 +743,7 @@ BEGIN
         ok := ~IsNeedPrint(ctx)
            OR (ctx.opt.cmdLen = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, ctx.opt.cmdLen))
       ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
-        ok := writeObject(out, ctx, types, ps.view)
+        ok := WriteObject(out, ctx, types, ps.view)
       ELSIF IsNeedPrint(ctx) THEN
         ok := 1 = Stream.WriteChars(out, " ", 0, 1)
       END
@@ -755,8 +756,6 @@ RETURN
   ok
 END WritePieces;
 
-PROCEDURE WriteObject(VAR out: Stream.Out; VAR ctx: PrintContext; types: Types; obj: PObject): BOOLEAN;
-VAR ok: BOOLEAN; struct: PStruct;
 BEGIN
   IF obj.type = types.textModelsStdModel THEN
     ok := WritePieces(out, ctx, obj(Text).pieces, types)
@@ -794,6 +793,4 @@ RETURN
   (doc.struct.object = NIL) OR WriteObject(out, ctx, doc.types, doc.struct.object)
 END PrintDoc;
 
-BEGIN
-  writeObject := WriteObject
 END Odc.
