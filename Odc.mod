@@ -71,6 +71,8 @@ CONST
   InputWindows1251*  = 2;
   LastOption*        = 2;
 
+  StructDeepMax = 100H;
+
 TYPE
   Options* = RECORD
     commanderReplacement*: ARRAY 64 OF CHAR;
@@ -81,13 +83,14 @@ TYPE
   END;
 
   Types = RECORD
-    desc: ARRAY 128 OF RECORD
+    desc: ARRAY 100H OF RECORD
       name: INTEGER;
       base: INTEGER
     END;
-    names: ARRAY 4096 OF CHAR;
+    names: ARRAY 2000H OF CHAR;
     top, currentDesc,
-    textModelsStdModel, devCommandersStdView: INTEGER
+    textModelsStdModel, devCommandersStdView,
+    structDeep: INTEGER
   END;
 
   PBlock = POINTER TO Block;
@@ -148,6 +151,7 @@ BEGIN
   t.top := 0;
   t.textModelsStdModel := -1;
   t.devCommandersStdView := -1;
+  t.structDeep := 0;
   t.desc[0].name := 0;
   t.names := ""
 END TypesInit;
@@ -593,7 +597,8 @@ VAR id: BYTE; ok: BOOLEAN;
   END ReadObject;
 
 BEGIN
-  ok := (rest > 0) & Read.Byte(in, id);
+  ok := (types.structDeep < StructDeepMax) & (rest > 0) & Read.Byte(in, id);
+  INC(types.structDeep);
   IF ~ok THEN
     size := 0
   ELSE
@@ -613,7 +618,8 @@ BEGIN
       size := 1;
       ok := FALSE
     END
-  END
+  END;
+  DEC(types.structDeep)
 RETURN
   ok
 END ReadStruct;
