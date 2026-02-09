@@ -22,7 +22,7 @@ mkdir -p "${TMP}/${NAME}/pregen"
 cp *.mod LICENSE README.md "${TMP}/${NAME}/"
 ost to-c odcey.Cli "${TMP}/${NAME}/pregen/" -m .
 cd /usr/share/vostok/singularity/implementation
-cp o7.[hc] CFiles.[hc] Platform.[hc] Uint32.h Int32.h Windows_.[hc] ArrayFill.h ArrayCopy.h CLI.[hc] OsEnv.[hc] "${TMP}/${NAME}/pregen/"
+cp o7.[hc] CFiles.[hc] Platform.[hc] Uint32.h Int32.h Windows_.[hc] ArrayFill.h ArrayCopy.h CLI.[hc] OsEnv.[hc] OsExec.[hc] "${TMP}/${NAME}/pregen/"
 cd "${TMP}"
 tar czf "${SOURCES_DIR}/${NAME}.tar.gz" "${NAME}"
 cd -
@@ -62,7 +62,11 @@ install -m 0755 odcey %{buildroot}/usr/bin/odcey
 /usr/bin/odcey
 
 %changelog
-$ Sun 1 Feb 2026 ${MAINTAINER} - 0.3.1
+* Mon 9 Feb 2026 ${MAINTAINER} - 0.3.2
+- Used «git config» command instead of editing .git/config
+- Fixed a lot of minor drawbacks
+
+* Sun 1 Feb 2026 ${MAINTAINER} - 0.3.1
 - Fixed excess memory allocation
 
 * Tue Jan 27 2026 ${MAINTAINER} - 0.3

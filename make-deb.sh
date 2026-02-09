@@ -48,6 +48,13 @@ License: Apache-2.0
 EOF
 
 cat > "${DEB_DIR}/usr/share/doc/odcey/changelog" <<EOF
+odcey (0.3.2) stable; urgency=low
+
+  * Used «git config» command instead of editing .git/config
+  * Fixed a lot of minor drawbacks
+
+ -- ${MAINTAINER_0}  Mon, 9 Feb 2026 00:00:00 +0200
+
 odcey (0.3.1) stable; urgency=low
 
   * Fixed excess memory allocation
