@@ -47,8 +47,8 @@ BEGIN
   log.n;
   log.sn("Usage:");
   IF cli THEN
-    log.sn(" 0. odcey text  [input [output]] { options }"); log.n;
-    log.sn("    odcey [text] input [output] { options }"); log.n;
+    log.sn(" 0. odcey text  [input [output]] { options }");
+    log.sn("    odcey [text] input [output]  { options }");
     log.sn(" 1. odcey git    [dir]");
     log.sn(" 2. odcey mc");
     commanderTo  := "-commander-to <str>";
