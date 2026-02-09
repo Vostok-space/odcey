@@ -4,6 +4,8 @@ Provides converting to plain UTF-8 text.
 
 ## Usage
     odcey text  [input [output]] { options }
+    odcey        input [output]  { options }
+
     odcey git   [dir]
     odcey mc
 
@@ -61,6 +63,8 @@ Example for powershell:
     /usr/bin/sudo snap install vostok --classic --beta && /usr/bin/sudo snap alias vostok ost
     # or through brew
     brew tap vostok-space/oberon && brew install vostok
+    # or through npm
+    /usr/bin/sudo npm install --global vostok-oberon
     # then build
     ost to-bin odcey.Cli odcey -m . -cc 'cc -O1 -s'
 

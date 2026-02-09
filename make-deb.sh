@@ -73,5 +73,5 @@ find "${DEB_DIR}" -type d -exec chmod 0755 {} +
 find "${DEB_DIR}" -type f -exec chmod 0644 {} +
 chmod 0755 "${DEB_DIR}/usr/bin/odcey"
 
-fakeroot dpkg-deb --build "${DEB_DIR}" "built/${DEB_FILE}"
+fakeroot dpkg-deb -Zgzip -z9 --build "${DEB_DIR}" "built/${DEB_FILE}"
 lintian "built/${DEB_FILE}"
