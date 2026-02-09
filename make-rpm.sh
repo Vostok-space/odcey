@@ -21,7 +21,8 @@ NAME="${PKG_NAME}-${VERSION}"
 mkdir -p "${TMP}/${NAME}/pregen"
 cp *.mod LICENSE README.md "${TMP}/${NAME}/"
 ost to-c odcey.Cli "${TMP}/${NAME}/pregen/" -m .
-cd /usr/share/vostok/singularity/implementation
+IMPL="share/vostok/singularity/implementation"
+cd /usr/$IMPL || cd /usr/local/$IMPL
 cp o7.[hc] CFiles.[hc] Platform.[hc] Uint32.h Int32.h Windows_.[hc] ArrayFill.h ArrayCopy.h CLI.[hc] OsEnv.[hc] OsExec.[hc] "${TMP}/${NAME}/pregen/"
 cd "${TMP}"
 tar czf "${SOURCES_DIR}/${NAME}.tar.gz" "${NAME}"
