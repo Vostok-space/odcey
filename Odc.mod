@@ -250,8 +250,8 @@ END ReadNext;
 PROCEDURE ReadEndNext(VAR in: Stream.In; VAR next: INTEGER): BOOLEAN;
 VAR ok: BOOLEAN; comment: INTEGER;
 BEGIN
-  ok := ReadNext(in, comment, next) & (next = 0);
-  IF ok & ~ODD(comment) THEN
+  ok := ReadNext(in, comment, next);
+  IF ok & (next = 0) & ~ODD(comment) THEN
     next := -1
   END
 RETURN
