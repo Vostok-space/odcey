@@ -79,3 +79,6 @@ Build both vostok and odcey from scratch by multiline POSIX shell command:
 
     result/ost to-bin odcey.Cli result/odcey -infr . -m ../odcey &&
     result/odcey help
+
+## Test
+    tests/build_and_run.sh
