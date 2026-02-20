@@ -647,7 +647,7 @@ END ReadDoc;
 PROCEDURE Code*(char: CHAR): INTEGER;
 VAR code: INTEGER;
 BEGIN
-  IF Utf8.CarRet = char THEN
+  IF (Utf8.CarRet = char) OR (0EX = char) THEN
     code := ORD(Utf8.NewLine)
   ELSIF (BlackboxReplacementMin > char) OR (char > BlackboxReplacementMax) THEN
     code := ORD(char)
