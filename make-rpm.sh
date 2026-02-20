@@ -63,6 +63,12 @@ install -m 0755 odcey %{buildroot}/usr/bin/odcey
 /usr/bin/odcey
 
 %changelog
+* Sat 21 Feb 2026 ${MAINTAINER} - 0.4
+- Added option -write-descriptors
+- Paragraph separator converts to line feed
+- The last char is always line feed when printing to stdout
+- Fixed links reading
+
 * Mon 9 Feb 2026 ${MAINTAINER} - 0.3.2
 - Used «git config» command instead of editing .git/config
 - Fixed a lot of minor drawbacks
