@@ -1,0 +1,1322 @@
+<Documents.StdDocumentDesc><Documents.ModelDesc><TextViews.StdViewDesc><TextRulers.StdRulerDesc><TextRulers.StdStyleDesc><TextRulers.AttributesDesc><StdLinks.LinkDesc>Table of Contents ↑<StdLinks.LinkDesc>
+6 View Construction
+
+Views are the central abstraction in the BlackBox Component Builder. Everything revolves around views: most commands operate on views, windows display views, views can be internalized and externalized, views perform interaction with the user, and views may be embedded into other views. 
+
+<StdLinks.TargetDesc>6.1 Introduction<StdLinks.TargetDesc>
+
+This view programming tutorial consists of four sections, each of which introduces a special aspect of view programming. The section "message handling" (chapters 6.2 to 6.5) explains how the behavior of a view is defined through the view's message handlers, i.e., how the answering of preferences, controller messages and properties influences the view's relation to its environment and the view's reaction on user input. The second section explains the aspect of the model-view separation which allows multi view editing (6.6). The next section shows how the undo/redo facility of the BlackBox Component Framework can be used if the content of a view is changed with the help of operation objects (6.7). In the last section the special structure of all extensible BlackBox Component Framework modules is explained, namely the separation of the interface and the implementation of a view (6.8). Directory objects are the key to this design pattern.
+
+<StdLinks.TargetDesc>6.2 Message handling<StdLinks.TargetDesc>
+
+In this section, we present a sequence of increasingly more versatile implementations of a view object which displays a rectangular colored area. In particular, this view will handle Preferences, Controller messages and Properties.
+
+Every view is a subtype of the abstract type Views.View. The concrete extension must at least implement the abstract procedure Views.Restore that draws the view's contents. The first example of our view simply draws a red rectangle. This version is about the simplest possible view implementation. Its major components are the declaration of a Views.View extension, the implementation of a Views.Restore procedure which draws the contents of the view, and a command procedure which allocates and initializes the view:
+
+MODULE ObxViews0;
+
+	IMPORT Views, Ports;
+
+	TYPE View = POINTER TO RECORD (Views.View) END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, Ports.red)
+	END Restore;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); Views.Deposit(v)
+	END Deposit;
+
+END ObxViews0.
+
+To execute this program, invoke the following command:
+
+	<DevCommanders.StdViewDesc> "ObxViews0.Deposit; StdCmds.Open"
+
+The result of this command is shown in Figure 6-1.
+
+<ObxViews0.ViewDesc>
+
+Figure 6-1: Result of "ObxViews0.Deposit; StdCmds.Open"
+
+This simple program is completely functional already. The procedure ObxViews0.Deposit puts a newly allocated view into a system queue. The command StdCmds.Open in the command string above removes a view from this queue, and opens it in a new window. Note that whole sequences of commands must be enclosed between quotes, while for single commands the quotes may be omitted.
+
+Instead of opening the view in a window, it could be pasted into the focus container (e.g., a text or a form):
+<TextViews.StdViewDesc>	<DevCommanders.StdViewDesc> "ObxViews0.Deposit; StdCmds.PasteView"	>< set the caret here before executing the command<TextControllers.StdCtrlDesc><TextRulers.StdRulerDesc><TextRulers.StdStyleDesc><TextRulers.AttributesDesc><TextModels.AttributesDesc>
+Like StdCmds.Open, the command StdCmds.PasteView removes a view from the queue, but pastes it to the focus view. The above command sequence could also be used in a menu, for example.
+
+Every document which contains an ObxViews0 view can be saved in a file, and this file can be opened again through the standard Open... menu entry. Our simple red rectangle will be displayed correctly in the newly opened document, provided the code file of the module ObxViews0 is available.
+
+A view which has been opened in its own window can also be saved in a file. When opened again, the document then consists of this single view only.
+
+Every view performs its output operations and mouse/keyboard polling via a Views.Frame object. In the above example, ObxViews0.View.Restore uses its frame parameter f to draw a rectangle. A frame can be regarded as a mapper object, in this case for both input and output simultaneously (here we need not be interested in the rider and carrier for this mapper, which are both defined in module Ports). A frame embodies coordinate transformations and clipping facilities.
+
+If the view is displayed on the screen, the frame is a mapper on a screen port. If the view is printed, the frame is a mapper on a printer port. From the view's perspective, this difference is not relevant. Thus no special code is necessary to support printing.
+
+The view may be copied and pasted into containers such as text views or form views. Additionally, the size of the view can be changed by selecting it and then manipulating the resize handles. All this functionality is offered by the BlackBox Component Framework and requires no further coding.  If this default behavior is not convenient, it can be modified. In the following we will show how this is done.
+
+<StdLinks.TargetDesc>6.3 Preference messages<StdLinks.TargetDesc>
+
+You might have noticed that the size of a newly opened view is rather arbitrary. However, before opening the view, the framework sends the view a message with a proposed size. The view may adapt this proposal to its own needs. To do that, the message of type Properties.SizePref must be answered in the view's HandlePropMsg procedure. Before a view is displayed for the first time, the proposed size for the width and the height of the view is Views.undefined. The following version of our sample view draws a rectangle with a width of 2 cm and a height of 1 cm. Changes compared to the previous version are written in bold face.
+
+MODULE ObxViews1;
+
+	IMPORT Views, Ports, Properties;
+
+	TYPE View = POINTER TO RECORD (Views.View) END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, Ports.red)
+	END Restore;
+
+	PROCEDURE (v: View) HandlePropMsg (VAR msg: Properties.Message);
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				 msg.w := 20 * Ports.mm; msg.h := 10 * Ports.mm
+			END
+		ELSE	(* ignore other messages *)
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); Views.Deposit(v)
+	END Deposit;
+
+END ObxViews1.
+
+<DevCommanders.StdViewDesc> "ObxViews1.Deposit; StdCmds.Open"
+
+
+Every newly generated view now assumes the desired predefined size. This is only possible because the view and its container cooperate, in this case via the Properties.SizePref message. A container is expected to send this message whenever it wants to change a view's size, and then adhere to the returned data. However, for the understanding of the BlackBox Component Framework it is essential to know that while a well-behaved container should follow this protocol, it is not required to do so. That's why such a message is called a preference. It describes merely a view's preference, so that the surrounding container can make allowances for the special needs of the view. But it is always the container which has the last word in such negotiations. For example, the container will not let embedded views become larger than itself. The standard document, text, and form containers are well-behaved in that they support all preferences defined in module Properties. Special containers, e.g. texts, may define additional preferences specific to their type of contents. It is important to note that a view can ignore all preferences it doesn't know or doesn't care about.
+
+The Properties.SizePref allows us to restrict the possible values for the width and the height of a view. For example, we can enforce a minimal and a maximal size, or fix the height or width of the view, or specify a constraint between its width and height. The procedures Properties.ProportionalConstraint and Properties.GridConstraint are useful standard implementations to specify constraints. The next version of our view implementation specifies that the rectangle is always twice as wide as it is high. In addition, minimal and maximal values for the height (and thus also for the width) are specified. If the view is resized using the resize handles, the constraints are not violated. Try it out!
+
+MODULE ObxViews2;
+
+	IMPORT Views, Ports, Properties;
+
+	TYPE View = POINTER TO RECORD (Views.View) END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, Ports.red)
+	END Restore;
+
+	PROCEDURE (v: View) HandlePropMsg (VAR msg: Properties.Message);
+		CONST min = 5 * Ports.mm; max = 50 * Ports.mm;
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				 msg.w := 20 * Ports.mm; msg.h := 10 * Ports.mm
+			ELSE
+				Properties.ProportionalConstraint(2, 1, msg.fixedW, msg.fixedH, msg.w, msg.h);
+				IF msg.h < min THEN
+					msg.h := min; msg.w := 2 * min
+				ELSIF msg.h > max THEN
+					msg.h := max; msg.w := 2 * max
+				END
+			END
+		ELSE	(* ignore other messages *)
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); Views.Deposit(v)
+	END Deposit;
+
+END ObxViews2.
+	
+<DevCommanders.StdViewDesc> "ObxViews2.Deposit; StdCmds.Open"
+
+
+We will look at two other preferences in this tutorial. The first one is Properties.ResizePref.
+
+	TYPE
+		ResizePref = RECORD (Properties.Preference)
+			fixed,
+			horFitToPage, verFitToPage,
+			horFitToWin, verFitToWin: BOOLEAN   (* OUT *)
+		END;
+
+The receiver of this message may indicate that it doesn't wish to be resized, by setting fixed to TRUE. As a consequence, the view will not display resize handles when it is selected, i.e., it cannot be resized interactively. However, the Properties.SizePref message is still sent to the view, as the initial size still needs to be determined.
+
+If a view is a root view, i.e., the outermost view in a document or window (e.g., if opened with StdCmds.Open), then the size of the window, the size of the view, or both might be changed.
+
+However, sometimes it is convenient if the view size is automatically adapted whenever the window is resized, e.g., for help texts which should use as much screen estate as possible. For other views, it may be preferable that their size is not determined by the window, but rather by their contents, or by the page setup of the document in which they are embedded. A view can indicate such preferences by setting the horFitToWin, verFitToWin, horFitToPage, and verFitToPage flags in the Properties.SizePref message. These flags have no effect if the view is not a root view, i.e., if it is embedded deeper inside a document.
+
+An automatic adaptation of the view size to the actual window size can be achieved by setting the fields horFitToWin and verFitToWin. The size of the view is then bound to the window, i.e., the user can change it directly by resizing the window.
+
+Note that if the size of the view is bound to the size of the window (either by setting horFitToWin or verFitToWin), then no Properties.SizePref messages are sent to the view, i.e., the constraints specified through Properties.SizePref are no longer enforced. Additionally, the view does not display resize handles, regardless of the fixed flag.
+
+By setting the fields horFitToPage or verFitToPage, the width or the height of the view can be bound to the actual printer page size. The width of a text view is usually bound to the width of the page size, and can be changed via the page setup mechanism of the underlying operating system. The following example enforces that the size of a root view is bound to the size of the window:
+
+MODULE ObxViews3;
+
+	IMPORT Views, Ports, Properties;
+
+	TYPE View = POINTER TO RECORD (Views.View) END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, Ports.red)
+	END Restore;
+
+	PROCEDURE (v: View) HandlePropMsg (VAR msg: Properties.Message);
+		CONST min = 5 * Ports.mm; max = 50 * Ports.mm;
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				 msg.w := 20 * Ports.mm; msg.h := 10 * Ports.mm
+			ELSE
+				Properties.ProportionalConstraint(2, 1, msg.fixedW, msg.fixedH, msg.w, msg.h);
+				IF msg.h < min THEN
+					msg.h := min; msg.w := 2 * min
+				ELSIF msg.h > max THEN
+					msg.h := max; msg.w := 2 * max
+				END
+			END
+		| msg: Properties.ResizePref DO
+			msg.horFitToWin := TRUE; msg.verFitToWin := TRUE
+		ELSE	(* ignore other messages *)
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); Views.Deposit(v)
+	END Deposit;
+
+END ObxViews3.	 
+
+<DevCommanders.StdViewDesc> "ObxViews3.Deposit; StdCmds.Open"
+
+
+The next preference we look at is Properties.FocusPref.
+
+	TYPE
+		FocusPref = RECORD (Properties.Preference)
+			atLocation: BOOLEAN;   (* IN *)
+			x, y: INTEGER;   (* IN *)
+			hotFocus, setFocus, selectOnFocus: BOOLEAN   (* OUT *)
+		END;
+
+When an attempt is made to activate an embedded view, by clicking in it, then the Properties.FocusPref message is sent to the view. If this message is not answered the view is selected as a whole (a so-called singleton). This is the behavior of the views implemented in the examples above. To see this, place the caret on the next line and click on the commander below, then on the pasted view:
+<TextViews.StdViewDesc>	<DevCommanders.StdViewDesc> "ObxViews3.Deposit; StdCmds.PasteView"	>< set the caret here before executing the command<TextControllers.StdCtrlDesc><TextRulers.StdRulerDesc><TextRulers.StdStyleDesc><TextRulers.AttributesDesc><TextModels.AttributesDesc>
+This behavior is adequate if a view is passive. However, if the view contains editable contents, or if there are menu commands that operate on the view, the user should be able to focus the view. The focus is where keyboard input is sent to, where the current selection or caret are displayed (if there are any such marks), and where upon some menu commands operate. In fact, menus can be made to appear whenever a view is focused, and disappear as soon as the view loses focus (more on this below). A root view is always focused when its document window is focus (i.e., is the top window).
+
+If an embedded view wants to become focus, it must answer the Properties.FocusPref message. The view can choose whether it wants to become focus permanently or if it wants only be focus as long as the mouse button is pressed. The latter is called a hot focus. A typical example of a hot focus is a command button. If a view wants to be a hot focus, it must set the flag hotFocus. The focus is then released immediately after the mouse is released. If a view wants to become focus permanently, then the flag setFocus must be set instead. setFocus should be set for all genuine editors, such that context-sensitive menu commands can be attached to the view. In addition to the setFocus flag, a view may set the selectOnFocus flag to indicate that upon focusing by keyboard, the view's contents should be selected. Text entry fields are prime examples for this behavior: the contents of a newly focused text entry field is selected, if the user focused it not by clicking in it, but by using the tabulator key.
+
+If the user clicks in an unfocused view, then the atLocation flag is set by the framework before sending the message. The receiving view may decide whether to become focused depending on where the user clicked. The mouse position is passed to the view in the focus preference's x and y fields. Text rulers are examples of views which become focused depending on the mouse location. If you click in the icons or in the area below the scale of a ruler, the ruler is not focused. Otherwise it is focused. Try this out with the ruler below. If you don't see a ruler, execute the Show Marks command in the Text menu.
+
+A view is not necessarily focused through a mouse click. In forms for example, the views can be selected using the tabulator key. There, the views do not become focused through a mouse click, and the atLocation field is accordingly set to FALSE by the framework.
+
+The next version of our example will answer the FocusPref message and set the setFocus flag. This is done by adding the following statements to the previous example's HandlePropMsg procedure:
+
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+
+If an embedded view is focused, the frame of the view is marked with a suitable focus border mark, and view-specific menus may appear while others disappear.
+
+<StdLinks.TargetDesc>6.4 Controller messages<StdLinks.TargetDesc>
+
+Other messages that may be interpreted by HandlePropMsg will be discussed later. Next we will see how a view can react on user input, e.g., on mouse clicks in the view or on commands called through a menu. For simple views this behavior is implemented in the procedure Views.HandleCtrlMsg. It is also possible to define a separate object, a so-called controller, that implements the interactive behavior of a view. Programming of controller objects is not described in this document, since controllers are only recommended for the most complex views.
+
+TheViews.HandleCtrlMsg handler answers the controller messages sent to the view. A controller message is a message that is sent along exactly one path in a view hierarchy, the focus path. Every view on the focus path decides for itself whether it is the terminal of this path, i.e., whether it is the current focus, or whether the message should be forwarded to one of its embedded views. It is important to note that all controller messages which are not relevant for a particular view type can simply be ignored.
+
+In order to be able to perform edit operations on the focus view, the framework must allow to somehow perform these operations. Mouse clicks and key strokes can always be issued. However, how the menus should look like may be decided by the view itself. For that purpose, the message Controllers.PollOpsMsg is sent to the view. Depending on its current state (e.g., its current selection) and depending on the contents of the clipboard, the focus view can inform the framework of which editing operations it currently supports. The valid operations are elements of the {Controllers.cut, Controllers.copy, Controllers.paste, Controllers.pasteView} set.
+
+	TYPE
+		PollOpsMsg = RECORD (Controllers.Message)
+			type: Stores.TypeName;   (* OUT *)
+			pasteType: Stores.TypeName;   (* IN *)
+			singleton: Views.View;   (* OUT *)
+			selectable: BOOLEAN;   (* OUT *)
+			valid: SET   (* OUT *)
+		END;
+
+The set of valid edit operations is returned in the valid field, where valid IN {Controllers.cut, Controllers.copy, Controllers.paste}. According to the set of valid operations, the corresponding menu entries in the Edit menu are enabled or disabled, e.g., Cut, Copy, Paste and Paste Object.... The field pasteType contains the concrete type of the view from which a copy would be pasted, if a paste operation occurred. Depending on this field, the view could decide whether it wants to support the paste operation or not. PollOpsMsg is sent when the user clicks in the menu bar. Its sole purpose is to enable or disable menu items, i.e., to provide user feedback.
+If a view supports a selection of its contents, then selectable must be set to TRUE. As a consequence, the menu entry Select All will be enabled. The flag should be set regardless of whether a selection currently exists or not.
+In the type field a type name may be passed. This name denotes a context for the focus view. This context is used to determine which menus are relevant for the focus view. As a convention, a view assigns the type name of its interface base type to type, e.g. "ObxViews4.View". A menu which indicates to be active on "ObxViews4.View" will be displayed if such a view is focus. The type name is used because it is easy to make unique, so that name collisions are avoided. The framework doesn't interpret the name.
+The singleton field is only meaningful for container views. It denotes a container's currently selected view, if the selection consists of exactly one embedded view.
+
+The following example view can become focus, supports the paste operation, and informs the framework that its contents is selectable. As a consequence, the menu entries Paste  and Select All  in the Edit menu are enabled. Additionally, it defines the context "Obx.Tutorial". Therefore the following menu appears whenever the view is focused; provided that the menu has been installed.
+Note that the name of the context, in this case "Obx.Tutorial", by convention starts with the subsystem or a module name followed by a dot, in this case "Obx.". This is highly recommended, in order to make context names globally unique. Often, the name is simply the name of a view type, e.g., "TextViews.View".
+A menu can either be defined in the global menu text System/Rsrc/Menus, or more appropriately in its own subsystem's menu text, in this case in Obx/Rsrc/Menus . The global menu text then only needs an INCLUDE "Obx" statement to make the Obx menus known.
+
+		MENU "New" ("Obx.Tutorial")
+			"Beep"	""	"Dialog.Beep"	""
+		END
+		
+
+MODULE ObxViews4;
+
+	IMPORT Views, Ports, Properties, Controllers;
+
+	TYPE View = POINTER TO RECORD (Views.View) END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, Ports.red)
+	END Restore;
+
+	PROCEDURE (v: View) HandlePropMsg (VAR msg: Properties.Message);
+		CONST min = 5 * Ports.mm; max = 50 * Ports.mm;
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				 msg.w := 20 * Ports.mm; msg.h := 10 * Ports.mm
+			ELSE
+				Properties.ProportionalConstraint(2, 1, msg.fixedW, msg.fixedH, msg.w, msg.h);
+				IF msg.h < min THEN
+					msg.h := min; msg.w := 2 * min
+				ELSIF msg.h > max THEN
+					msg.h := max; msg.w := 2 * max
+				END
+			END
+		| msg: Properties.ResizePref DO
+			msg.horFitToWin := TRUE; msg.verFitToWin := TRUE
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE	(* ignore other messages *)
+		END
+	END HandlePropMsg;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame;
+									VAR msg: Controllers.Message; VAR focus: Views.View);
+	BEGIN
+		WITH msg: Controllers.PollOpsMsg DO
+			msg.valid := {Controllers.paste}; msg.selectable := TRUE;
+			msg.type := "Obx.Tutorial"
+		ELSE	(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); Views.Deposit(v)
+	END Deposit;
+
+END ObxViews4.
+<TextViews.StdViewDesc><DevCommanders.StdViewDesc> "ObxViews4.Deposit; StdCmds.PasteView"	>< set the caret here before executing the command<TextControllers.StdCtrlDesc><TextRulers.StdRulerDesc><TextRulers.StdStyleDesc><TextRulers.AttributesDesc><TextModels.AttributesDesc>
+
+Next we discuss how a view can react on actual edit messages. In particular, these are the Controllers.EditMsg for edit operations such as cut, copy, or paste, and the Controllers.TrackMsg for mouse clicks.
+
+Whenever a key is pressed in a view or when a cut, copy or paste operation is invoked, a Controllers.EditMsg is sent to the focus view. The cut, copy and paste operations can only be generated through the environment (menu) if they have been announced with the Controllers.PollOpsMsg.
+
+	TYPE
+		EditMsg = RECORD (Controllers.RequestMessage)
+			op: INTEGER;   (* IN *)
+			modifiers: SET;   (* IN *)
+			char: CHAR;   (* IN *)
+			view: Views.View;   (* IN for paste, OUT for cut and copy *)
+			w, h: INTEGER;   (* IN for paste, OUT for cut and copy *)
+			isSingle: BOOLEAN;   (* IN for paste, OUT for cut and copy *)
+			clipboard: BOOLEAN   (* IN *)
+		END;
+
+The op field specifies which kind of operation has to be performed. If op = Controllers.cut then a copy of the focus view has to be generated. The contents of the new view is a copy of the focus view's selection. The new view is assigned to the view field. In addition, the selection is deleted in the focus view.
+There is one special case: if the selection consists of exactly one view (a singleton), then a copy of the singleton should be copied to the view field, not a copy of the singleton's container. In this case, isSingle must be set to TRUE.
+
+Except for the deletion of the selection, the same operations have to be performed if op = Controllers.copy.
+
+If a key is pressed, then the op field has the value Controllers.pasteChar. The character to be pasted is stored in the char field. The modifiers set indicates control key has been pressed. In the latter case, the char field has to be interpreted as a control character.
+
+The paste operation is the inverse of the copy operation: a copy of the contents of the view stored in the view field has to be copied into the focus view's contents. This operation is indicated by op = Controllers.paste. The view must know the type of the view whose contents is to be pasted and must decide how to insert the pasted view's contents into its own view. For example, a text field view should support copying from a text view only.
+
+If isSingle is TRUE, or if the contents of view cannot be pasted because it has an unknown or incompatible type, a copy of view must be pasted. Of course, this is only possible in general containers, which allow the embedding of other views.
+
+When pasting a complete view, the desired width and height of the pasted view are given in the fields w and h. These values can be treated as hints by the receiving view. If they are not suitable, others can be used.
+
+Whenever the mouse button is pressed in the focus view, a Controllers.TrackMsg is sent to the view. The coordinates are specified in the x and y fields (of the base type Controllers.CursorMessage). The modifiers set indicates whether modifier keys have been pressed, or whether a double click has been performed. The platform independent modifiers are Controllers.doubleClick, Controllers.extend, Controllers.modify, Controllers.popup, and Controllers.pick. For the mapping of platform specific keys see <StdLinks.LinkDesc>platform specific modifiers<StdLinks.LinkDesc>. If the view wants to show a feedback while tracking the mouse, it needs to poll the mouse position in a loop, by calling the Input procedure of the passed frame. Input also returns information on whether the mouse has been released. Any feedback should directly be drawn into the frame in which the mouse button was pressed.
+
+After the feedback loop, a possible modification of the view's contents need to be broadcast to all the frames that display the same view. Remember that the same document, and consequently all its embedded views, may be displayed in several windows (see Chapter 2). If an embedded view is visible in three windows, there exist three frames displaying the same view. Procedure Views.Update causes a restore of the view once in each of its visible frames.
+
+As an example, we extend our view with a cross-hair marker that can be moved around. The coordinates of this marker are stored as additional fields in the view object. Note that if a view contains instance variables, it should implement the CopyFromSimpleView, Internalize and Externalize procedures in order to work properly. We refer to the next section of this view tutorial, which describes the purpose of these messages. In our example view, the marker can be moved around with the mouse, or through the cursor keys. When a cursor key is pressed, the focus view is informed by sending it an EditMsg with op = pasteChar.
+
+From time to time a Controllers.PollCursorMsg is sent to the focus view. The view may set the form of the cursor depending on the coordinates of the mouse. The cursor field can be assigned a cursor out of {Ports.arrowCursor, Ports.textCursor, Ports.graphicsCursor, Ports.tableCursor, Ports.bitmapCursor}. The particular form of the cursor depends on the underlying operating system. In our example view, we set the cursor to a graphics cursor.
+
+MODULE ObxViews5;
+
+	IMPORT Views, Ports, Properties, Controllers;
+
+	TYPE
+		View = POINTER TO RECORD (Views.View)
+			x, y: INTEGER
+		END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, Ports.red);
+		f.DrawLine(v.x, t, v.x, b, 0, Ports.white); f.DrawLine(l, v.y, r, v.y,
+														0, Ports.white)
+	END Restore;
+
+	PROCEDURE (v: View) HandlePropMsg (VAR msg: Properties.Message);
+		CONST min = 5 * Ports.mm; max = 50 * Ports.mm;
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				 msg.w := 20 * Ports.mm; msg.h := 10 * Ports.mm
+			ELSE
+				Properties.ProportionalConstraint(2, 1, msg.fixedW, msg.fixedH, msg.w, msg.h);
+				IF msg.h < min THEN msg.h := min; msg.w := 2 * min
+				ELSIF msg.h > max THEN msg.h := max; msg.w := 2 * max
+				END
+			END
+		| msg: Properties.ResizePref DO
+			msg.horFitToWin := TRUE; msg.verFitToWin := TRUE
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE	(* ignore other messages *)
+		END
+	END HandlePropMsg;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame;
+										VAR msg: Controllers.Message; 
+										VAR focus: Views.View);
+		VAR x, y, w, h: INTEGER; m: SET; isDown: BOOLEAN;
+	BEGIN
+		WITH msg: Controllers.PollOpsMsg DO
+			msg.valid := {Controllers.paste}; msg.selectable := TRUE;
+			msg.type := "Obx.Tutorial"
+		| msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN	(* cursor keys *)
+				IF msg.char = 1DX THEN INC(v.x, Ports.mm)
+				ELSIF msg.char = 1CX THEN DEC(v.x, Ports.mm)
+				ELSIF msg.char  = 1EX THEN DEC(v.y, Ports.mm)
+				ELSIF msg.char  = 1FX THEN INC(v.y, Ports.mm)
+				END;
+				Views.Update(v, Views.keepFrames)
+			END
+		| msg: Controllers.TrackMsg DO
+			v.x := msg.x; v.y := msg.y;
+			v.context.GetSize(w, h); v.Restore(f, 0, 0, w, h);
+			REPEAT
+				f.Input(x, y, m, isDown);
+				IF (x # v.x) OR (y # v.y) THEN
+					v.x := x; v.y := y; v.Restore(f, 0, 0, w, h)
+				END
+			UNTIL ~isDown;
+			Views.Update(v, Views.keepFrames)
+		| msg: Controllers.PollCursorMsg DO
+			msg.cursor := Ports.graphicsCursor
+		ELSE	(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); v.x := 0; v.y := 0; Views.Deposit(v)
+	END Deposit;
+
+END ObxViews5.
+
+<DevCommanders.StdViewDesc> "ObxViews5.Deposit; StdCmds.Open"
+
+
+There exist many other controller messages which may be sent to a view, but which are beyond the scope of this tutorial. There are messages for the generic scrolling mechanism of the BlackBox Component Framework (Controllers.PollSectionMsg, Controllers.ScrollMsg, Controllers.PageMsg),  messages which implement drag & drop (Controllers.PollDropMsg, Controllers.DropMsg, Controllers.TransferMessage) and messages which control the selection (Controllers.SelectMsg). For these and other controller messages we refer to the documentation of the Controllers module.
+
+<StdLinks.TargetDesc>6.5 Properties<StdLinks.TargetDesc>
+
+We want to close this section with a final extension of our view: the color of the view should be changeable through the Attributes menu. The general mechanism to get and set attributes of a view from its environment are properties. A view may know about attributes such as font, color, size, but it may also know about arbitrary other attributes. Properties are set with the Properties.SetMsg and inspected with the Properties.PollMsg. Properties in one of these messages are stored in a linked list. If a view gets a Properties.SetMsg it should traverse its property list and adjust those properties it knows about. 
+A Properties.PollMsg is sent to the view to get its properties. The view should return all properties it knows about. Properties can be inserted into a message's property list with the Properties.Insert procedure.
+
+Every property describes up to 32 attributes. The known set defines which attributes are known to the view. The view may also specify which attributes are read-only in the readOnly set. The valid set finally defines which attributes currently have a defined value. For example, if in a text several characters with different sizes are selected, then the attribute size is known to the view, but currently does not have a valid value. The selection is not homogeneous, and thus there is no single valid value.
+
+	TYPE
+		Property = POINTER TO ABSTRACT RECORD 
+			next-: Properties.Property;
+			known, readOnly, valid: SET;	(* valid and readOnly are subsets of known *)
+			(p: Property) IntersectWith (q: Properties.Property; OUT equal: BOOLEAN), NEW, ABSTRACT
+		END;
+
+A special property is Properties.StdProp. This property encompasses font attributes as well as color, and it is known to the BlackBox environment. The supported attributes are Properties.color, Properties.typeface, Properties.size, Properties.style, Properites.weight. The fields in the property record hold the corresponding values.
+
+	TYPE
+		StdProp = POINTER TO RECORD (Properties.Property)
+			color: Dialog.Color;
+			typeface: Fonts.Typeface;
+			size: INTEGER;
+			style: RECORD
+				val, mask: SET
+			END;
+			weight: INTEGER
+		END;
+
+The last version of our view only support the color attribute of the standard property. If it receives a Properties.PollMsg message, it returns a Properties.StdProp object where only the color field is set, and where only the color attribute is defined as known and valid. On a Properties.SetMsg, the property list must be searched for a standard property whose color field is valid. When the color has been changed, the view must be updated in all its frames.
+
+MODULE ObxViews6;
+
+	IMPORT Views, Ports, Properties, Controllers;
+
+	TYPE
+		View = POINTER TO RECORD (Views.View)
+			x, y: INTEGER;
+			c: Ports.Color
+		END;
+
+	PROCEDURE (v: View)  Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawRect(l, t, r, b, Ports.fill, v.c);
+		f.DrawLine(v.x, t, v.x, b, 0, Ports.white); f.DrawLine(l, v.y, r, v.y, 0, Ports.white)
+	END Restore;
+	
+	PROCEDURE (v: View) HandlePropMsg (VAR msg: Properties.Message);
+		CONST min = 5 * Ports.mm; max = 50 * Ports.mm;
+		VAR stdProp: Properties.StdProp; prop: Properties.Property;
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				 msg.w := 20 * Ports.mm; msg.h := 10 * Ports.mm
+			ELSE
+				Properties.ProportionalConstraint(2, 1, msg.fixedW, msg.fixedH, msg.w, msg.h);
+				IF msg.h < min THEN msg.h := min; msg.w := 2 * min
+				ELSIF msg.h > max THEN msg.h := max; msg.w := 2 * max
+				END
+			END
+		| msg: Properties.ResizePref DO
+			msg.horFitToWin := TRUE; msg.verFitToWin := TRUE
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		| msg: Properties.PollMsg DO
+			NEW(stdProp);
+			stdProp.color.val := v.c;
+			stdProp.valid := {Properties.color};
+			stdProp.known := {Properties.color};
+			Properties.Insert(msg.prop, stdProp)
+		| msg: Properties.SetMsg DO
+			prop := msg.prop;
+			WHILE prop # NIL DO
+				WITH prop: Properties.StdProp DO
+					IF Properties.color IN prop.valid THEN v.c := prop.color.val END
+				ELSE
+				END;
+				prop := prop.next
+			END;
+			Views.Update(v, Views.keepFrames)
+		ELSE	(* ignore other messages *)
+		END
+	END HandlePropMsg;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame; VAR msg: Controllers.Message;
+										VAR focus: Views.View);
+		VAR x, y, w, h: INTEGER; m: SET; isDown: BOOLEAN;
+	BEGIN
+		WITH msg: Controllers.PollOpsMsg DO
+			msg.valid := {Controllers.paste}; msg.selectable := TRUE;
+			msg.type := "Obx.Tutorial"
+		| msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN
+				IF msg.char = 1DX THEN INC(v.x, Ports.mm)
+				ELSIF msg.char = 1CX THEN DEC(v.x, Ports.mm)
+				ELSIF msg.char  = 1EX THEN DEC(v.y, Ports.mm)
+				ELSIF msg.char  = 1FX THEN INC(v.y, Ports.mm)
+				END;
+				Views.Update(v, Views.keepFrames)
+			END
+		| msg: Controllers.TrackMsg DO
+			v.x := msg.x; v.y := msg.y; v.context.GetSize(w, h); v.Restore(f, 0, 0, w, h);
+			REPEAT
+				f.Input(x, y, m, isDown);
+				IF (x # v.x) OR (y # v.y) THEN
+					v.x := x; v.y := y; v.Restore(f, 0, 0, w, h)
+				END
+			UNTIL ~isDown;
+			Views.Update(v, Views.keepFrames)
+		| msg: Controllers.PollCursorMsg DO
+			msg.cursor := Ports.graphicsCursor
+		ELSE	(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); v.x := 0; v.y := 0; v.c := Ports.black; Views.Deposit(v)
+	END Deposit;
+
+END ObxViews6.
+<TextViews.StdViewDesc><DevCommanders.StdViewDesc> "ObxViews6.Deposit; StdCmds.PasteView"	>< set the caret here before executing the command<TextControllers.StdCtrlDesc><TextRulers.StdRulerDesc><TextRulers.StdStyleDesc><TextRulers.AttributesDesc><TextModels.AttributesDesc>
+
+<StdLinks.TargetDesc>6.6 Model-View separation<StdLinks.TargetDesc>
+
+In this section, we present a sequence of five increasingly more versatile versions of a view object which displays a string that may be typed in by the user. This string represents the view-specific data which it displays. We will see that multi-view editing is possible if this string is represented by a separate model object.
+
+Let us start with a first version of this view, where the string is stored in the view itself. Every view displays its own string. A string's length is limited to 255 characters, but no error handling is performed in the following demonstration programs.
+
+
+MODULE ObxViews10;
+
+	IMPORT Fonts, Ports, Views, Controllers, Properties;
+
+	CONST d = 20 * Ports.point;
+
+	TYPE
+		View = POINTER TO RECORD (Views.View)
+			i: INTEGER;				(* position of next free slot in string *)
+			s: ARRAY 256 OF CHAR	(* string *)
+		END;
+
+	PROCEDURE (v: View) Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawString(d, d, Ports.black, v.s, Fonts.dir.Default())
+	END Restore;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame;
+										VAR msg: Controllers.Message; 
+										VAR focus: Views.View);
+	BEGIN
+		WITH msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN	(* accept typing *)
+				v.s[v.i] := msg.char; INC(v.i); v.s[v.i] := 0X;	(* append character to string *)
+				Views.Update(v, Views.keepFrames)	(* restore v in any frame that displays it *)
+			END
+		ELSE						(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+	
+	PROCEDURE (v:View) HandlePropMsg (VAR msg: Properties.Message);
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN 
+				msg.w := 10 * d; msg.h := 2 * d
+			END
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); v.s := ""; v.i := 0;
+		Views.Deposit(v)
+	END Deposit;
+
+END ObxViews10.
+
+<DevCommanders.StdViewDesc> "ObxViews10.Deposit; StdCmds.Open"
+
+As described in the last section, a character typed in is sent to the view in the form of a controller message record (Controllers.Message), to be handled by the view's HandleCtrlMsg procedure. This procedure is called with a Controllers.EditMsg as actual parameter when a character was typed in, and it reacts by inserting the character contained in the message into its field s. Afterwards, it causes the view to be restored; i.e., wherever the view is visible on the display it is redrawn in its new state, displaying the string that has become one character longer.
+
+In the above example, a view contains a variable state (the view's string field s). This state should be saved when the window's contents are saved to disk. For this purpose, a view provides two procedures, called Internalize and Externalize, whose uses are shown in the next iteration of our example program:
+
+MODULE ObxViews11;
+(* Same as ObxViews10, but the view's string can be stored and copied *)
+
+	IMPORT Fonts, Ports, Stores, Views, Controllers, Properties;
+
+	CONST d = 20 * Ports.point;
+
+	TYPE
+		View = POINTER TO RECORD (Views.View)
+			i: INTEGER;					(* position of next free slot in string *)
+			s: ARRAY 256 OF CHAR		(* string *)
+		END;
+
+	PROCEDURE (v: View) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadInt(v.i); rd.ReadString(v.s)
+		END
+	END Internalize;
+
+	PROCEDURE (v: View) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteInt(v.i); wr.WriteString(v.s)
+	END Externalize;
+
+	PROCEDURE (v: View) CopyFromSimpleView (source: Views.View);
+	BEGIN
+		WITH source: View DO
+			v.i := source.i; v.s := source.s
+		END
+	END CopyFromSimpleView;
+
+	PROCEDURE (v: View) Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawString(d, d, Ports.black, v.s, Fonts.dir.Default())
+	END Restore;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame;
+											VAR msg: Controllers.Message;
+											VAR focus: Views.View);
+	BEGIN
+		WITH msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN	(* accept typing *)
+				v.s[v.i] := msg.char; INC(v.i); v.s[v.i] := 0X;	(* append character to string *)
+				Views.SetDirty(v);	(* mark view's document as dirty *)
+				Views.Update(v, Views.keepFrames)	(* restore v in any frame that displays it *)
+			END
+		ELSE							(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE (v:View) HandlePropMsg (VAR msg: Properties.Message);
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				msg.w := 10 * d; msg.h := 2 * d
+			END
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		NEW(v); v.s := ""; v.i := 0;
+		Views.Deposit(v)
+	END Deposit;
+
+END ObxViews11.
+
+
+A few comments about View.Internalize and View.Externalize are in order here: First, the two procedures have a reader, respectively a writer, as variable parameters. These file mappers are set up by BlackBox itself; a view simply uses them.
+
+Second, View.Internalize must read exactly the same (amount of) data that View.Externalize has written.
+
+Third, a user interface typically defines some visual distinction for documents that contain modified views, i.e., for "dirty" documents. Or it may require that when the user closes a dirty document, he or she should be asked whether to save it or not. In order to make this possible, a view must tell when its contents has been modified. This is done by the Views.BeginModification /Views.EndModification calls.
+
+In addition to View.Internalize and View.Externalize, the above view implementation also implements a CopyFromSimpleView procedure. Such a procedure should copy the view's contents, given a source view of the same type. CopyFromSimpleView should usually have the same effect as if the source's contents were externalized on a temporary file, and then internalized again by the destination view. There can be exceptions, though. For example, a text copies even temporary embedded views such as error markers, but it doesn't externalize them.
+
+A view that contains (mutable) state should implement CopyFromSimpleView, so that it can be printed. The reason that this is necessary is that the framework makes a shallow copy of a view that is being printed, in order to avoid the original view to be changed by pagination, scrolling, or similar modifications that may be performed during printing.
+
+Basically, ObxViews11 has shown most of what is involved in implementing a simple view class. Such simple views are often sufficient; thus it is important that they are easy to implement. However, there are cases where a more advanced view design is in order. In particular, if a window normally can only display a small part of a view's contents, multi-view editing should be supported.
+
+Multi-view editing means that there may be several views showing the same data. The typical application of this feature is to have two or more windows displaying the same document, each of these windows showing a different part of it in its own view. Thus, if a view's data has been changed, it and all the other affected views must be notified of the change, such that they can update the display accordingly.
+
+The following sample program, which is the same as the previous one except that it supports multi-view editing, is roughly twice as long. This indicates that the design and implementation of such views is quite a bit more involved than that of simple views. It is a major design decision whether this additional complexity is warranted by its increased convenience.
+
+
+MODULE ObxViews12;
+(* Same as ObxViews11, but uses a separate model for the string *)
+
+	IMPORT Fonts, Ports, Stores, Models, Views, Controllers, Properties;
+
+	CONST d = 20 * Ports.point;
+
+	TYPE
+		Model = POINTER TO RECORD (Models.Model)
+			i: INTEGER;			(* position of next free slot in string *)
+			s: ARRAY 256 OF CHAR	(* string *)
+		END;
+
+		View = POINTER TO RECORD (Views.View)
+			model: Model
+		END;
+
+
+	(* Model *)
+
+	PROCEDURE (m: Model) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadInt(m.i); rd.ReadString(m.s)
+		END
+	END Internalize;
+
+	PROCEDURE (m: Model) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteInt(m.i); wr.WriteString(m.s)
+	END Externalize;
+
+	PROCEDURE (m: Model) CopyFrom (source: Stores.Store);
+	BEGIN
+		WITH source: Model DO
+			m.i := source.i; m.s := source.s
+		END
+	END CopyFrom;
+
+
+	(* View *)
+
+	PROCEDURE (v: View) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER; st: Stores.Store;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadStore(st);
+			v.model := st(Model)
+		END
+	END Internalize;
+
+	PROCEDURE (v: View) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteStore(v.model)
+	END Externalize;
+
+	PROCEDURE (v: View) CopyFromModelView (source: Views.View;
+										model: Models.Model);
+	BEGIN
+		v.model := model(Model)
+	END CopyFromModelView;
+
+	PROCEDURE (v: View) Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawString(d, d, Ports.black, v.model.s, Fonts.dir.Default())
+	END Restore;
+
+	PROCEDURE (v: View) ThisModel (): Models.Model;
+	BEGIN
+		RETURN v.model
+	END ThisModel;
+
+	PROCEDURE (v: View) HandleModelMsg (VAR msg: Models.Message);
+	BEGIN
+		Views.Update(v, Views.keepFrames)	(* restore v in any frame that displays it *)
+	END HandleModelMsg;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame;
+										VAR msg: Controllers.Message;
+										VAR focus: Views.View);
+		VAR m: Model; umsg: Models.UpdateMsg;
+	BEGIN
+		WITH msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN
+				m := v.model;
+				m.s[m.i] := msg.char; INC(m.i);
+				m.s[m.i] := 0X;	(* append character to string *)
+				Views.SetDirty(v);	(* mark view's document as dirty *)
+				Models.Broadcast(m, umsg)	(* update all views on this model *)
+			END
+		ELSE						(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE (v:View) HandlePropMsg (VAR msg: Properties.Message);
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				msg.w := 10 * d; msg.h := 2 * d
+			END
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View; m: Model;
+	BEGIN
+		NEW(m); m.i := 0; m.s := "";
+		NEW(v); v.model := m; Stores.Join(v, m);
+		Views.Deposit(v)
+	END Deposit;
+
+END ObxViews12.
+	
+<DevCommanders.StdViewDesc> "ObxViews12.Deposit; StdCmds.Open"
+
+
+Multi-view editing is realized by factoring out the view's data into a separate data structure, called a model. This model is shared between all its views, i.e., each such view contains a pointer to the model:
+
+
+<StdPictures.StdViewDesc>
+
+Figure 6.2:  Two Views on one Model
+
+A model is, like a view, an extension of a Stores.Store, which is the base type for all persistent objects. Stores define the Internalize and Externalize procedures we've already met for a view. In ObxViews12, the model stores the string and its length, while the view stores the whole model! For this purpose, a Stores.Writer provides a WriteStore and a Stores.Reader provides a ReadStore procedure.
+
+Stores may form arbitrary graphs. For example, one or several views may refer to the same model, both models and views are store extensions. A graph of stores that may be saved in a file is called a document. In order to recognize the boundary of a document upon externalization, stores are bound to a domain. All stores of a document refer to the same domain object (Stores.Domain).
+
+Domains are also used as containers for operations, i.e., commands performed on some store which can be undone and redone (see next chapter). The operation history is associated with a domain. Furthermore, domains define the set of objects which get notified in a broadcast (either Views.Broadcast, Views.Domaincast or Models.Broadcast).
+
+For more information on stores and domains, see the on-line documentation of module Stores.
+
+Now that the model is separated from the view, copying is done by the model, not by the view anymore.
+
+View.ThisModel returns the model of the view. Its default implementation returns NIL, which should be overridden in views that contain models. This procedure is used by the framework to find all views that display a given model, in order to implement model broadcasts, as described in the next paragraph.
+
+Views with a model implement the procedure View.CopyFromModelView instead of View.CopyFromSimpleView. Like Internalize and Externalize, CopyFromSimpleView and CopyFromModelView are exported as implement-only procedures, i.e., they can only be implemented, but not called. They are called internally in module Views, in its CopyOf and CopyWithNewModel functions.
+
+When a model changes, all views displaying it must be updated. For this purpose, a model broadcast is generated: A model broadcast notifies all views which display a particular model about a model modification that has happened. This gives each view the opportunity to restore its contents on the screen. A model broadcast is generated in the View.HandleCtrlMsg procedure by calling Models.Broadcast. The message is received by every view which contains the correct model, via its View.HandleModelMsg procedure.
+
+This indirection becomes important if different types of views display the same model, e.g., a tabular view and a graphical view on a spreadsheet model; and if instead of restoring the whole view ‐ as has been done in our examples ‐ only the necessary parts of the views are restored. These necessary parts may be completely different for different types of views.
+
+A very sophisticated model may be able to contain ("embed") arbitrary views as part of its contents. For example, a text view may display a text model which contains not only characters (its intrinsic contents), but also graphical or other views flowing along in the text stream.
+
+The combination of multi-view editing and hierarchical view embedding can lead to the following situation, where two text views show the same text model, which in turn contains a graphics view. Each text view lives in its own window and thus has its own frame. The graphics view is unique however, since it is embedded in the text model, which is shared by both views. Nevertheless the graphics can be visible in both text views simultaneously, and thus there can be two frames for this one view:
+
+
+<StdPictures.StdViewDesc>
+
+Figure 6-3:  Two Frames on one View
+
+As a consequence, one and the same view may be visible in several places on the screen simultaneously. In this case, this means that when the view has changed, several places must be updated: the view must restore the necessary area once for every frame on this view. As a consequence, a notification mechanism must exist which lets the view update each of its frames. This is done in a similar way as the notification mechanism for model changes: with a view broadcast. Fortunately, there is a standard update mechanism in the framework which automatically handles this second broadcast level (see below).
+
+We now can summarize the typical events that occur when a user interacts with a view:
+
+Controller message handling:
+
+1) Some controller message is sent to the focus view.
+2) The focus view interprets the message and changes its model accordingly.
+3) The model broadcasts a model message, describing the change that has been performed.
+
+Model message handling:
+
+4) Every view on this model receives the model message.
+5) It determines how its display should change because of this model modification.
+6) It broadcasts a view message, describing how its display should change.
+
+View message handling:
+
+7) The view receives the view notification message once for every frame on this view.
+8) Every time, the view redraws the frame contents according to the view message.
+
+This mechanism is fundamental to the BlackBox Component Framework. If you have understood it, you have mastered the most complicated part of a view implementation. Interpreting the various controller messages, which are defined in module Controllers, is more a matter of diligence than of understanding difficult new concepts. Moreover, you only need to interpret the controller messages in which you are interested, because messages that are not relevant can simply be ignored.
+
+Usually, steps 6, 7, and 8 are handled automatically by the framework: the view merely calls Views.Update if a whole view should be updated, or Views.UpdateIn if some rectangular part of the view should be updated. Calls of these update procedures cause a lazy update, i.e., the framework adds up the region to be updated, but does not immediately cause any redrawing. Instead, the command first runs to completion, so that all data structures of the modified views are consistent again. Only the display of the views is still the same as before the command. But then the framework restores all views that have been marked for update. This means that for every frame that displays a view, the view's Restore method is called with this frame as argument. If the view is displayed in two (or more) frames in different windows, it is restored two (or more) times; once for every frame. When the framework starts restoring frames of a window, it temporarily redirects the drawing operations of a port into a background pixelmap buffer. When all frames of this window that need updating have been restored, the framework copies the pixelmap buffer to the screen pixelmap, and turns off the redirection of drawing operations.
+
+The effect of this buffering mechanism and of the lazy update mechanism is that minimal flickering occurs. The lazy update mechanism means that even for complex editing operations, a given screen region is only restored once. This can reduce flickering, since flickering can occur when the same area is drawn several times in rapid succession. The buffering mechanism reduces flickering if drawing occurs in layers, from "bottom" to "top" (because this also means drawing several time in rapid succession). For example, you may first draw the background in one color, and then the a filled rectangle on top of it in another color. Thanks to the buffering mechanism, the user never sees the situation after the background is drawn, but before the rectangle is drawn.
+
+The lazy update mechanism also has another advantage: it completely decouples the modification of a model from its drawing. Without this mechanism, it can become rather difficult to correctly perform screen updates for complex editing operations. For example, consider moving a selection of graphics objects in a graphics editor. The selected objects first must be deleted at their old position, this may mean that other objects that have been obscured by the selection now need to be drawn (but not the selected objects themselves!). Then the objects' positions are changed, and then they are redrawn at their new positions (if the source and target positions overlap, drawing has now happened twice). Drawing may have to be done several times, if there are several windows displaying the same data. But of course the change of object positions must only occur once. It is much less tricky to simply call Views.UpdateIn for all rectangles that (may) need updating, and to let the framework call the necessary Restore methods later!
+
+Normally, the lazy update mechanism is sufficient. Thus a view programmer needs to use explicit view messages only if no complete restore in all frames of a view is desired. This is the case only for marks like selection, focus, or carets, or for rubberbanding or similar feedback effects during mouse tracking. Such marks can sometimes be handled more efficiently because they are involutory: applied twice, they have no effect. Thus marks are often switched on and off through custom view messages during a command, not through the delaying lazy update mechanism. But except for such light-weight marks, you should always use the lazy update mechanism described above. Note that there exists a method Ports.Frame.MarkRect explicitly for drawing such marks.
+
+
+<StdLinks.TargetDesc>6.7 Operations<StdLinks.TargetDesc>
+
+Now that we have seen the crucial ingredients of a view implementation, a less central feature can be presented. The next program is a variation of the above one, in which a controller message is not interpreted directly. Instead, an operation object is created and then executed. An operation provides a do / undo / redo capability, as shown in the program below.
+
+The operation we define in this example is the PasteCharOp. The operation's Do procedure performs the desired modification, and must be involutory, i.e. when called twice, its effect must have been neutralized again. We use the flag PasteCharOp.do to specify whether the character PasteCharOp.char has to be inserted into or removed from the model PasteCharOp.m. In any case, the Do procedure has to update all views on the model PasteCharOp.m with a model broadcast.
+
+The procedure NewPasteCharOp generates a new operation and the procedure Models.Do executes this operation, i.e., the operation's Do procedure is called and the operation is recorded for a later undo. The name of the operation as specified in the Models.Do command will appear in the Edit menu after the Undo or Redo entry respectively.
+
+
+MODULE ObxViews13;
+(* Same as ObxViews12, but generate undoable operations for character insertion *)
+
+	IMPORT Fonts, Ports, Stores, Models, Views, Controllers, Properties;
+
+	CONST d = 20 * Ports.point;
+
+	TYPE
+		Model = POINTER TO RECORD (Models.Model)
+			i: INTEGER;			(* position of next free slot in string *)
+			s: ARRAY 256 OF CHAR	(* string *)
+		END;
+
+		View = POINTER TO RECORD (Views.View)
+			model: Model
+		END;
+
+		PasteCharOp = POINTER TO RECORD (Stores.Operation)
+			model: Model;
+			char: CHAR;
+			do: BOOLEAN
+		END;
+
+
+	(* PasteCharOp *)
+
+	PROCEDURE (op: PasteCharOp) Do;
+		VAR m: Model; msg: Models.UpdateMsg;
+	BEGIN
+		m := op.model;
+		IF op.do THEN			(* do operation's transformation *)
+			m.s[m.i] := op.char; INC(m.i)	(* insert character into string *)
+		ELSE						(* undo operation's transformation *)
+			DEC(m.i)				(* remove character from string *)
+		END;
+		m.s[m.i] := 0X;
+		op.do := ~op.do;		(* toggle between "do" and "undo" *)
+		Models.Broadcast(m, msg)	(* update all views on this model *)
+	END Do;
+
+	PROCEDURE NewPasteCharOp (m: Model; char: CHAR): PasteCharOp;
+		VAR op: PasteCharOp;
+	BEGIN
+		NEW(op); op.model := m; op.char := char; op.do := TRUE;
+		RETURN op
+	END NewPasteCharOp;
+
+
+	(* Model *)
+
+	PROCEDURE (m: Model) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadInt(m.i); rd.ReadString(m.s)
+		END
+	END Internalize;
+
+	PROCEDURE (m: Model) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteInt(m.i); wr.WriteString(m.s)
+	END Externalize;
+
+	PROCEDURE (m: Model) CopyFrom (source: Stores.Store);
+	BEGIN
+		WITH source: Model DO
+			m.i := source.i; m.s := source.s
+		END
+	END CopyFrom;
+
+
+	(* View *)
+
+	PROCEDURE (v: View) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER; st: Stores.Store;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadStore(st);
+			v.model := st(Model)
+		END
+	END Internalize;
+
+	PROCEDURE (v: View) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteStore(v.model)
+	END Externalize;
+
+	PROCEDURE (v: View) CopyFromModelView (source: Views.View; model: Models.Model);
+	BEGIN
+		v.model := model(Model)
+	END CopyFromModelView;
+
+	PROCEDURE (v: View) Restore (f: Views.Frame; l, t, r, b: INTEGER);
+	BEGIN
+		f.DrawString(d, d, Ports.black, v.model.s, Fonts.dir.Default())
+	END Restore;
+
+	PROCEDURE (v: View) ThisModel (): Models.Model;
+	BEGIN
+		RETURN v.model
+	END ThisModel;
+
+	PROCEDURE (v: View) HandleModelMsg (VAR msg: Models.Message);
+	BEGIN
+		Views.Update(v, Views.keepFrames)  (* restore v in any frame that displays it *)
+	END HandleModelMsg;
+
+	PROCEDURE (v: View) HandleCtrlMsg (f: Views.Frame; VAR msg: Controllers.Message;
+										VAR focus: Views.View);
+		VAR op: Stores.Operation;
+	BEGIN
+		WITH msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN
+				op := NewPasteCharOp(v.model, msg.char);	(* generate operation *)
+				Models.Do(v.model, "Typing", op)	(* execute operation *)
+			END
+		ELSE						(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE (v:View) HandlePropMsg (VAR msg: Properties.Message);
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				msg.w := 10 * d; msg.h := 2 * d
+			END
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE
+		END
+	END HandlePropMsg;
+
+	PROCEDURE Deposit*;
+		VAR v: View; m: Model;
+	BEGIN
+		NEW(m); m.i := 0; m.s := "";
+		NEW(v); v.model := m; Stores.Join(v, m);
+		Views.Deposit(v)
+	END Deposit;
+
+END ObxViews13.
+
+<DevCommanders.StdViewDesc> "ObxViews13.Deposit; StdCmds.Open"
+
+
+Further examples which use the undo/redo mechanism through operations can be found e.g. in <StdLinks.LinkDesc>ObxOmosi<StdLinks.LinkDesc> or <StdLinks.LinkDesc>ObxLines<StdLinks.LinkDesc>.
+
+
+<StdLinks.TargetDesc>6.8 Separation of interface and implementation<StdLinks.TargetDesc>
+
+As a last version of our sample view, we modify the previous variant by exporting the Model and View types, and by separating interface and implementation of these two types. In order to do the latter, so-called directory objects are introduced, which generate (hidden) default implementations of abstract data types. A user now might implement its own version of the abstract type and offer it through its own directory object, however he can not inherit from the default implementation and thus avoids the fragile base class problem.
+
+Real BlackBox subsystems would additionally split the module into two modules, one for the model and one for the view. A third module with commands might be introduced, if the number and complexity of commands warrant it (e.g., TextModels, TextViews, and TextCmds). Even more complicated views would further split views into views and controllers, each in its own module.
+
+
+MODULE ObxViews14;
+(* Same as ObxViews13, but interfaces and implementations separated, and operation directly in Insert procedure *)
+
+	IMPORT Fonts, Ports, Stores, Models, Views, Controllers, Properties;
+
+	CONST d = 20 * Ports.point;
+
+	TYPE
+		Model* = POINTER TO ABSTRACT RECORD (Models.Model) END;
+
+		ModelDirectory* = POINTER TO ABSTRACT RECORD END;
+
+		View* = POINTER TO ABSTRACT RECORD (Views.View) END;
+
+		Directory* = POINTER TO ABSTRACT RECORD END;
+
+
+		StdModel = POINTER TO RECORD (Model)
+			i: INTEGER;			(* position of next free slot in string *)
+			s: ARRAY 256 OF CHAR	(* string *)
+		END;
+
+		StdModelDirectory = POINTER TO RECORD (ModelDirectory) END;
+
+		StdView = POINTER TO RECORD (View)
+			model: Model
+		END;
+
+		StdDirectory = POINTER TO RECORD (Directory) END;
+
+		PasteCharOp = POINTER TO RECORD (Stores.Operation)
+			model: StdModel;
+			char: CHAR;
+			do: BOOLEAN
+		END;
+
+
+	VAR
+		mdir-: ModelDirectory;
+		dir-: Directory;
+
+
+	(* Model *)
+
+	PROCEDURE (m: Model) Insert* (char: CHAR), NEW, ABSTRACT;
+	PROCEDURE (m: Model) Remove*, NEW, ABSTRACT;
+	PROCEDURE (m: Model) GetString* (OUT s: ARRAY OF CHAR), NEW, ABSTRACT;
+
+	(* ModelDirectory *)
+
+	PROCEDURE (d: ModelDirectory) New* (): Model, NEW, ABSTRACT;
+
+	(* PasteCharOp *)
+
+	PROCEDURE (op: PasteCharOp) Do;
+		VAR m: StdModel; msg: Models.UpdateMsg;
+	BEGIN
+		m := op.model;
+		IF op.do THEN				(* do operation's transformation *)
+			m.s[m.i] := op.char; INC(m.i);
+		ELSE						(* undo operation's transformation *)
+			DEC(m.i)				(* remove character from string *)
+		END;
+		m.s[m.i] := 0X;
+		op.do := ~op.do;			(* toggle between "do" and "undo" *)
+		Models.Broadcast(m, msg)	(* update all views on this model *)
+	END Do;
+
+
+	(* StdModel *)
+
+	PROCEDURE (m: StdModel) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadInt(m.i); rd.ReadString(m.s)
+		END
+	END Internalize;
+
+	PROCEDURE (m: StdModel) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteInt(m.i); wr.WriteString(m.s)
+	END Externalize;
+
+	PROCEDURE (m: StdModel) CopyFrom (source: Stores.Store);
+	BEGIN
+		WITH source: StdModel DO
+			m.i := source.i; m.s := source.s
+		END
+	END CopyFrom;
+
+
+	PROCEDURE (m: StdModel) Insert (char: CHAR);
+		VAR op: PasteCharOp;
+	BEGIN
+		NEW(op); op.model := m; op.char := char; op.do := TRUE;
+		Models.Do(m, "insertion", op)
+	END Insert;
+
+	PROCEDURE (m: StdModel) Remove;
+		VAR msg: Models.UpdateMsg;
+	BEGIN
+		DEC(m.i); m.s[m.i] := 0X;
+		Models.Broadcast(m, msg)	(* update all views on this model *)
+	END Remove;
+
+	PROCEDURE (m: StdModel) GetString (OUT s: ARRAY OF CHAR);
+	BEGIN
+		s := m.s$
+	END GetString;
+
+
+	(* StdModelDirectory *)
+
+	PROCEDURE (d: StdModelDirectory) New (): Model;
+		VAR m: StdModel;
+	BEGIN
+		NEW(m); m.s := "";  m.i := 0; RETURN m
+	END New;
+
+
+
+	(* Directory *)
+
+	PROCEDURE (d: Directory) New* (m: Model): View, NEW, ABSTRACT;
+
+
+	(* StdView *)
+
+	PROCEDURE (v: StdView) Internalize (VAR rd: Stores.Reader);
+		VAR version: INTEGER; st: Stores.Store;
+	BEGIN
+		rd.ReadVersion(0, 0, version);
+		IF ~rd.cancelled THEN
+			rd.ReadStore(st);
+			IF st IS Model THEN
+				v.model := st(Model)
+			ELSE
+				(* concrete model implementation couldn't be loaded->
+					an alien store was created *)
+				rd.TurnIntoAlien(Stores.alienComponent)
+				(* internalization of v is cancelled *)
+			END
+		END
+	END Internalize;
+
+	PROCEDURE (v: StdView) Externalize (VAR wr: Stores.Writer);
+	BEGIN
+		wr.WriteVersion(0);
+		wr.WriteStore(v.model)
+	END Externalize;
+
+	PROCEDURE (v: StdView) CopyFromModelView (source: Views.View; model: Models.Model);
+	BEGIN
+		WITH source: StdView DO
+			v.model := model(Model)
+		END
+	END CopyFromModelView;
+
+	PROCEDURE (v: StdView) Restore (f: Views.Frame; l, t, r, b: INTEGER);
+		VAR s: ARRAY 256 OF CHAR;
+	BEGIN
+		v.model.GetString(s);
+		f.DrawString(d, d, Ports.black, s, Fonts.dir.Default())
+	END Restore;
+
+	PROCEDURE (v: StdView) ThisModel (): Models.Model;
+	BEGIN
+		RETURN v.model
+	END ThisModel;
+
+	PROCEDURE (v: StdView) HandleModelMsg (VAR msg: Models.Message);
+	BEGIN
+		Views.Update(v, Views.keepFrames)	(* restore v in any frame that displays it *)
+	END HandleModelMsg;
+
+	PROCEDURE (v: StdView) HandleCtrlMsg (f: Views.Frame;
+										VAR msg: Controllers.Message;
+										VAR focus: Views.View);
+	BEGIN
+		WITH msg: Controllers.EditMsg DO
+			IF msg.op = Controllers.pasteChar THEN
+				v.model.Insert(msg.char)	(*  undoable insertion *)
+			END
+		ELSE						(* ignore other messages *)
+		END
+	END HandleCtrlMsg;
+
+	PROCEDURE (v:StdView) HandlePropMsg (VAR msg: Properties.Message);
+	BEGIN
+		WITH msg: Properties.SizePref DO
+			IF (msg.w = Views.undefined) OR (msg.h = Views.undefined) THEN
+				msg.w := 10 * d; msg.h := 2 *d 
+			END
+		| msg: Properties.FocusPref DO
+			msg.setFocus := TRUE
+		ELSE
+		END
+	END HandlePropMsg;
+
+
+	(* StdDirectory *)
+
+	PROCEDURE (d: StdDirectory) New* (m: Model): View;
+		VAR v: StdView;
+	BEGIN
+		ASSERT(m # NIL, 20);
+		NEW(v); v.model := m; Stores.Join(v, m);
+		RETURN v
+	END New;
+
+
+	PROCEDURE Deposit*;
+		VAR v: View;
+	BEGIN
+		v := dir.New(mdir.New());
+		Views.Deposit(v)
+	END Deposit;
+
+	PROCEDURE SetModelDir* (d: ModelDirectory);
+	BEGIN
+		ASSERT(d # NIL, 20);
+		mdir := d
+	END SetModelDir;
+
+	PROCEDURE SetDir* (d: Directory);
+	BEGIN
+		ASSERT(d # NIL, 20);
+		dir := d
+	END SetDir;
+
+	PROCEDURE Init;
+		VAR md: StdModelDirectory; d: StdDirectory;
+	BEGIN
+		NEW(md); mdir := md;
+		NEW(d); dir := d
+	END Init;
+
+BEGIN
+	Init
+END ObxViews14.
+
+<DevCommanders.StdViewDesc> "ObxViews14.Deposit; StdCmds.Open"
+
+
+A simple example of a BlackBox module which follows this design is DevMarkers. The marker views are simple views without a model, therefore only a directory object to generate new views is offered. The second directory object DevMarkers.stdDir keeps the standard implementation provided by this module. It might be used to install back the default implementation or to reuse the default implementation (as an instance) in another component.
+
+The separation of a type's definition from its implementation is recommended in the design of new BlackBox subsystems. However, simple view types which won't become publicly available or which are not meant to be extended can certainly dispense with this additional effort.
+
+Note that the subsystem wizard (menu item Tools->Create Subsystem...) helps to generate templates for the different kinds of view. In particular, it is possible to generate separate model and view modules. The tool uses the template texts stored in Dev/Rsrc/New. You may want to study the files Models5, Views5, and Cmds5 in this directory.
+
+
+<StdLinks.LinkDesc>Table of Contents ↑<StdLinks.LinkDesc>	<TextControllers.StdCtrlDesc><TextRulers.StdRulerDesc><TextRulers.StdStyleDesc><TextRulers.AttributesDesc><TextModels.AttributesDesc><Documents.ControllerDesc>

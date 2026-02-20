@@ -69,7 +69,9 @@ CONST
   SkipEmbeddedView*  = 0;
   SkipOberonComment* = 1;
   InputWindows1251*  = 2;
-  LastOption*        = 2;
+  LastCharNewLine*   = 3;
+  WriteDescriptors*  = 4;
+  LastOption*        = 4;
 
   StructDeepMax = 100H;
 
@@ -79,8 +81,7 @@ TYPE
     cmdLen: INTEGER;
     tab*: ARRAY 16 OF CHAR;
     tabLen: INTEGER;
-    set*: SET;
-    lastNewLine*: BOOLEAN
+    set*: SET
   END;
 
   Types = RECORD
@@ -742,19 +743,17 @@ VAR ok: BOOLEAN; struct: PStruct;
   BEGIN
     ok := TRUE;
     WHILE (ps # NIL) & ok DO
-      IF ps.kind = PieceView THEN
-        IF (ctx.opt.cmdLen > 0)
-         & (ps.view # NIL) & (ps.view.type = types.devCommandersStdView)
-        THEN
-          ok := ~IsNeedPrint(ctx)
-             OR (ctx.opt.cmdLen = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, ctx.opt.cmdLen))
-        ELSIF (ps.view # NIL) & ~(SkipEmbeddedView IN ctx.opt.set) THEN
-          ok := WriteObject(out, ctx, types, ps.view)
-        ELSIF IsNeedPrint(ctx) THEN
-          ok := 1 = Stream.WriteChars(out, " ", 0, 1)
-        END
-      ELSE
+      IF ps.kind # PieceView THEN
         ok := WritePiece(out, ctx, ps^)
+      ELSIF ps.view = NIL THEN
+        ok := ~IsNeedPrint(ctx)
+           OR (1 = Stream.WriteChars(out, " ", 0, 1))
+      ELSIF (ps.view.type # types.devCommandersStdView) OR (ctx.opt.cmdLen = 0) THEN
+        ok := (SkipEmbeddedView IN ctx.opt.set)
+           OR WriteObject(out, ctx, types, ps.view)
+      ELSE
+        ok := ~IsNeedPrint(ctx)
+           OR (ctx.opt.cmdLen = Stream.WriteChars(out, ctx.opt.commanderReplacement, 0, ctx.opt.cmdLen))
       END;
       ps := ps.next
     END
@@ -762,17 +761,32 @@ VAR ok: BOOLEAN; struct: PStruct;
     ok
   END WritePieces;
 
+  PROCEDURE WriteDesc(VAR out: Stream.Out; types: Types; type: INTEGER): BOOLEAN;
+  VAR name, l: INTEGER;
+  BEGIN
+    name := types.desc[type].name;
+    l := Charz.CalcLen(types.names, name)
+  RETURN
+    (1 = Stream.WriteChars(out, "<", 0, 1))
+  & (l = Stream.WriteChars(out, types.names, name, l))
+  & (1 = Stream.WriteChars(out, ">", 0, 1))
+  END WriteDesc;
+
 BEGIN
   IF obj.type = types.textModelsStdModel THEN
     ok := WritePieces(out, ctx, obj(Text).pieces, types)
-  ELSIF obj.first # NIL THEN
+  ELSE
+    IF WriteDescriptors IN ctx.opt.set THEN
+      ok := WriteDesc(out, types, obj.type);
+      ctx.prevChar := ORD(">")
+    ELSE
+      ok := TRUE
+    END;
     struct := obj.first;
-    REPEAT
+    WHILE ok & (struct # NIL) DO
       ok := (struct.object = NIL) OR WriteObject(out, ctx, types, struct.object);
       struct := struct.next
-    UNTIL ~ok OR (struct = NIL)
-  ELSE
-    ok := TRUE
+    END
   END
 RETURN
   ok
@@ -782,8 +796,7 @@ PROCEDURE DefaultOptions*(VAR opt: Options);
 BEGIN
   opt.commanderReplacement := "";
   opt.tab := Utf8.Tab;
-  opt.set := {};
-  opt.lastNewLine := FALSE
+  opt.set := {}
 END DefaultOptions;
 
 PROCEDURE PrintDoc*(VAR out: Stream.Out; doc: Document; opt: Options): BOOLEAN;
@@ -797,7 +810,7 @@ BEGIN
   ctx.prevChar := ORD(Utf8.NewLine);
   ctx.commentsDeep := 0;
   ok := (doc.struct.object = NIL) OR WriteObject(out, ctx, doc.types, doc.struct.object);
-  IF ok & (ctx.prevChar # ORD(Utf8.NewLine)) & opt.lastNewLine THEN
+  IF ok & (ctx.prevChar # ORD(Utf8.NewLine)) & (LastCharNewLine IN opt.set) THEN
     ignore := 1 = Stream.WriteChars(out, Utf8.NewLine, 0, 1)
   END
 RETURN

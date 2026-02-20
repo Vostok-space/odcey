@@ -41,7 +41,7 @@ VAR
   options: Odc.Options;
 
 PROCEDURE Help(cli: BOOLEAN);
-VAR commanderTo, skipEmbedded, skipComment, tab, windows1251: ARRAY 42 OF CHAR;
+VAR commanderTo, skipEmbedded, skipComment, writeDescs, tab, windows1251: ARRAY 42 OF CHAR;
 BEGIN
   log.sn("odcey - converter of .odc format to plain text");
   log.n;
@@ -54,6 +54,7 @@ BEGIN
     commanderTo  := "-commander-to <str>";
     skipEmbedded := "-skip-embedded-view";
     skipComment  := "-skip-comment      ";
+    writeDescs   := "-write-descriptors ";
     windows1251  := "-input-windows1251 ";
     tab          := "-tab <str>         "
   ELSE
@@ -62,7 +63,8 @@ BEGIN
     commanderTo  := "odcey.commanderTo(str)            ";
     skipEmbedded := "odcey.opt({Odc.SkipEmbeddedView })";
     skipComment  := "          {Odc.SkipOberonComment} ";
-    windows1251  := "          {Odc.InputWindows1251}  ";
+    writeDescs   := "          {Odc.WriteDescriptors } ";
+    windows1251  := "          {Odc.InputWindows1251 } ";
     tab          := "odcey.tab(str)                    "
   END;
   log.n;
@@ -70,6 +72,7 @@ BEGIN
   log.s("   "); log.s(commanderTo); log.sn("  set Commander-view replacement");
   log.s("   "); log.s(skipEmbedded); log.sn("  skips embedded views writing");
   log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
+  log.s("   "); log.s(writeDescs); log.sn("  write descriptors of views ");
   log.s("   "); log.s(windows1251); log.sn("  set charset Windows-1251 instead of Latin-1");
   log.s("   "); log.sn("  (useful for legacy Cyrillic BlackBox builds)");
   log.s("   "); log.s(tab); log.sn("  set tabulation replacement");
@@ -98,7 +101,7 @@ BEGIN
       opt := opts;
       IF output = "" THEN
         out := VDefaultIO.OpenOut();
-        opt.lastNewLine := TRUE
+        INCL(opt.set, Odc.LastCharNewLine)
       ELSE
         out := File.OpenOut(output)
       END;
@@ -177,7 +180,7 @@ BEGIN
       log.sn("Can not edit .git/info/attributes")
     ELSE
       ok := (OsExec.Do("git config diff.cp.binary true") = 0)
-          & (OsExec.Do("git config diff.cp.textconv 'odcey text <'") = 0);
+          & (OsExec.Do("git config diff.cp.textconv 'odcey text -write-descriptors <'") = 0);
       IF ~ok THEN
         log.sn("Can not setup git textconv")
       END
@@ -346,6 +349,7 @@ BEGIN
       IF ~Option(i, "-commander-to", options.commanderReplacement, ok)
        & ~BoolOption(i, "-skip-embedded-view", Odc.SkipEmbeddedView, options.set, ok)
        & ~BoolOption(i, "-skip-comment", Odc.SkipOberonComment, options.set, ok)
+       & ~BoolOption(i, "-write-descriptors", Odc.WriteDescriptors, options.set, ok)
        & ~BoolOption(i, "-input-windows1251", Odc.InputWindows1251, options.set, ok)
        & ~Option(i, "-tab", tabOpt, ok)
        & (argInd < LEN(args))
