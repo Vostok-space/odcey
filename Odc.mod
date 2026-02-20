@@ -30,7 +30,7 @@ IMPORT
   Utf8, Windows1251 := OldCharsetWindows1251;
 
 CONST
-  Version* = "0.d.3";
+  Version* = "0.4";
 
   Nil*     = 80H;
   Link*    = 81H;
@@ -79,7 +79,8 @@ TYPE
     cmdLen: INTEGER;
     tab*: ARRAY 16 OF CHAR;
     tabLen: INTEGER;
-    set*: SET
+    set*: SET;
+    lastNewLine*: BOOLEAN
   END;
 
   Types = RECORD
@@ -781,21 +782,26 @@ PROCEDURE DefaultOptions*(VAR opt: Options);
 BEGIN
   opt.commanderReplacement := "";
   opt.tab := Utf8.Tab;
-  opt.set := {}
+  opt.set := {};
+  opt.lastNewLine := FALSE
 END DefaultOptions;
 
 PROCEDURE PrintDoc*(VAR out: Stream.Out; doc: Document; opt: Options): BOOLEAN;
-VAR ctx: PrintContext;
+VAR ctx: PrintContext; ok, ignore: BOOLEAN;
 BEGIN
   ASSERT(opt.set - {0 .. LastOption} = {});
 
   ctx.opt := opt;
   ctx.opt.cmdLen := Charz.CalcLen(opt.commanderReplacement, 0);
   ctx.opt.tabLen := Charz.CalcLen(opt.tab, 0);
-  ctx.prevChar := -1;
-  ctx.commentsDeep := 0
+  ctx.prevChar := ORD(Utf8.NewLine);
+  ctx.commentsDeep := 0;
+  ok := (doc.struct.object = NIL) OR WriteObject(out, ctx, doc.types, doc.struct.object);
+  IF ok & (ctx.prevChar # ORD(Utf8.NewLine)) & opt.lastNewLine THEN
+    ignore := 1 = Stream.WriteChars(out, Utf8.NewLine, 0, 1)
+  END
 RETURN
-  (doc.struct.object = NIL) OR WriteObject(out, ctx, doc.types, doc.struct.object)
+  ok
 END PrintDoc;
 
 END Odc.

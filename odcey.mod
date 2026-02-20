@@ -31,7 +31,7 @@ IMPORT
   Platform;
 
 CONST
-  Version* = "0.3.2";
+  Version* = "0.4";
 
   McConfig = ".config/mc/mc.ext.ini";
   McConfigBackup = ".config/mc/mc.ext.ini~";
@@ -78,8 +78,8 @@ BEGIN
   log.sn("2. Configure viewer of midnight commander")
 END Help;
 
-PROCEDURE Text(input, output: ARRAY OF CHAR; opt: Odc.Options): BOOLEAN;
-VAR ok: BOOLEAN; in: Stream.PIn; out: Stream.POut; doc: Odc.Document;
+PROCEDURE Text(input, output: ARRAY OF CHAR; opts: Odc.Options): BOOLEAN;
+VAR ok: BOOLEAN; in: Stream.PIn; out: Stream.POut; doc: Odc.Document; opt: Odc.Options;
 BEGIN
   IF input # "" THEN
     in := File.OpenIn(input)
@@ -95,8 +95,10 @@ BEGIN
     IF ~ok THEN
       log.sn("Error during parsing input as .odc")
     ELSE
+      opt := opts;
       IF output = "" THEN
-        out := VDefaultIO.OpenOut()
+        out := VDefaultIO.OpenOut();
+        opt.lastNewLine := TRUE
       ELSE
         out := File.OpenOut(output)
       END;
