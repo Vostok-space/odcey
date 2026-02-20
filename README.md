@@ -14,6 +14,7 @@ Command 'text' prints text content of .odc; empty arguments for standard IO
     -commander-to <str>  allows in output replacing DevCommanders.StdView by the argument
     -skip-embedded-view  skips recursive writing of embedded views
     -skip-comment        skips (* Oberon comments *)
+    -write-descriptors   print descriptors of views
     -input-windows1251   set input charset Windows-1251 instead of Latin-1
     -tab <str>           set tabulation replacement
 

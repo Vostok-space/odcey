@@ -47,10 +47,10 @@ BEGIN
   log.n;
   log.sn("Usage:");
   IF cli THEN
-    log.sn(" 0. odcey text  [input [output]] { options }");
-    log.sn("    odcey [text] input [output]  { options }");
-    log.sn(" 1. odcey git    [dir]");
-    log.sn(" 2. odcey mc");
+    log.sn(" 0. odcey  text  [input [output]] { options }");
+    log.sn("    odcey [text]  input [output]  { options }");
+    log.sn(" 1. odcey  git   [dir]");
+    log.sn(" 2. odcey  mc");
     commanderTo  := "-commander-to <str>";
     skipEmbedded := "-skip-embedded-view";
     skipComment  := "-skip-comment      ";
@@ -69,11 +69,11 @@ BEGIN
   END;
   log.n;
   log.sn("0. Print text content of .odc, empty arguments for standard IO");
-  log.s("   "); log.s(commanderTo); log.sn("  set Commander-view replacement");
+  log.s("   "); log.s(commanderTo);  log.sn("  set Commander-view replacement");
   log.s("   "); log.s(skipEmbedded); log.sn("  skips embedded views writing");
-  log.s("   "); log.s(skipComment); log.sn("  skips (* Oberon comments *) ");
-  log.s("   "); log.s(writeDescs); log.sn("  write descriptors of views ");
-  log.s("   "); log.s(windows1251); log.sn("  set charset Windows-1251 instead of Latin-1");
+  log.s("   "); log.s(skipComment);  log.sn("  skips (* Oberon comments *) ");
+  log.s("   "); log.s(writeDescs);   log.sn("  print descriptors of views ");
+  log.s("   "); log.s(windows1251);  log.sn("  set charset Windows-1251 instead of Latin-1");
   log.s("   "); log.sn("  (useful for legacy Cyrillic BlackBox builds)");
   log.s("   "); log.s(tab); log.sn("  set tabulation replacement");
   log.n;
