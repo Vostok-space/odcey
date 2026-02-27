@@ -1,76 +1,83 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 PACKAGE_NAME="odcey"
-VERSION="0.2"
-ARCHIVE_NAME="odcey_${VERSION}.orig.tar.gz"
-DEB_DIR="odcey-${VERSION}"
-MAINTAINER_0="comdivbyzero project-Vostok@yandex.ru"
-MAINTAINER="${MAINTAINER_0}"
+VERSION="0.4"
+ARCHIVE_NAME="${PACKAGE_NAME}_${VERSION}.orig.tar.gz"
+DEB_DIR="${PACKAGE_NAME}-${VERSION}"
+MAINTAINER="comdivbyzero <project-Vostok@yandex.ru>"
 
 mkdir -p built
 cd built
 
-trash -f "${DEB_DIR}" "${ARCHIVE_NAME}"
+rm -rf -- "${DEB_DIR}" "${ARCHIVE_NAME}"
 
-mkdir -p "${DEB_DIR}/debian"
-cp ../*.mod "${DEB_DIR}/"
-
-cat > "${DEB_DIR}/debian/changelog" <<EOF
-odcey (0.2) stable; urgency=low
-
-  * initial package
-
- -- ${MAINTAINER_0}  Tue, 25 Mar 2025 00:00:00 +0200
-
-EOF
+mkdir -p "${DEB_DIR}"
+cp ../*.mod ../README.md ../LICENSE "${DEB_DIR}/"
 
 tar -czf "${ARCHIVE_NAME}" "${DEB_DIR}"
-trash -f ${DEB_DIR}/*.mod
 
 mkdir -p "${DEB_DIR}/debian/source"
-cat > "${DEB_DIR}/debian/control" <<EOF
+
+cat > "${DEB_DIR}/debian/changelog" <<EOT
+odcey (${VERSION}) unstable; urgency=medium
+
+  * Build source and binary Debian packages from upstream .mod sources.
+
+ -- ${MAINTAINER}  Wed, 26 Feb 2026 00:00:00 +0000
+EOT
+
+MISC_DEP='${misc:Depends}'
+SHLIBS_DEP='${shlibs:Depends}'
+
+cat > "${DEB_DIR}/debian/control" <<EOT
 Source: odcey
 Section: utils
 Priority: optional
 Maintainer: ${MAINTAINER}
 Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.5.0
+Standards-Version: 4.6.2
 Homepage: https://github.com/vostok-space/odcey
 Rules-Requires-Root: no
 
 Package: odcey
 Architecture: any
-Depends: libc6
+Depends: ${MISC_DEP}, ${SHLIBS_DEP}
 Description: converter of Blackbox Component Builder .odc format to plain text
-EOF
+ A command-line tool to convert .odc files from Blackbox Component Builder
+ into human-readable UTF-8 text format.
+EOT
 
-cat > "${DEB_DIR}/debian/rules" <<EOF
+cat > "${DEB_DIR}/debian/rules" <<'EOT'
 #!/usr/bin/make -f
 
-BINDIR=\$(CURDIR)/debian/odcey/usr/bin
+%:
+	dh $@
 
-binary:
-	pwd
-	mkdir -p \$(BINDIR)
-	ost to-bin odcey.Cli \$(BINDIR)/odcey -m . -m ../.. -cc "cc -flto=auto -O2 -s"
-	chmod 755 \$(BINDIR)/odcey
+override_dh_auto_build:
+	ost to-bin odcey.Cli odcey -m . -cc "cc -flto=auto -O2 -s"
 
-clean:
-
-.PHONY: binary clean
-EOF
+override_dh_auto_install:
+	install -D -m 0755 odcey debian/odcey/usr/bin/odcey
+EOT
 chmod +x "${DEB_DIR}/debian/rules"
-
-echo 13 > "${DEB_DIR}/debian/compat"
 
 echo "3.0 (quilt)" > "${DEB_DIR}/debian/source/format"
 
+cat > "${DEB_DIR}/debian/copyright" <<EOT
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: odcey
+Source: https://github.com/vostok-space/odcey
+
+Files: *
+Copyright: 2025-2026 comdivbyzero
+License: Apache-2.0
+EOT
+
 cd "${DEB_DIR}"
-dpkg-buildpackage -S --no-sign
-dpkg-buildpackage -b --no-sign
+dpkg-buildpackage -S -us -uc
+dpkg-buildpackage -b -us -uc
 
-ls -al "${DEB_DIR}"
-
-cd ../..
+cd ..
+ls -al
