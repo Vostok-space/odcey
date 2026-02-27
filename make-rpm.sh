@@ -44,7 +44,7 @@ Requires:       glibc
 
 %description
 A command-line tool to convert .odc files from Blackbox Component Builder
-into human-readable UTF-8 text format.
+into UTF-8 plain text.
 
 %prep
 %setup -q

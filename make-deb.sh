@@ -34,7 +34,7 @@ Architecture: ${TARGET_ARCH}
 Maintainer: ${MAINTAINER}
 Description: Converter of Blackbox Component Builder .odc to the plain UTF-8
  A command-line tool to convert .odc files from Blackbox Component Builder
- into human-readable UTF-8 text format.
+ into UTF-8 plain text.
 EOF
 
 cat > "${DEB_DIR}/usr/share/doc/odcey/copyright" <<EOF
@@ -43,7 +43,7 @@ Upstream-Name: odcey
 Source: https://github.com/vostok-space/odcey
 
 Files: *
-Copyright: 2025-2026 comdivbyzero
+Copyright: 2022-2026 comdivbyzero
 License: Apache-2.0
 EOF
 
