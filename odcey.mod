@@ -27,11 +27,17 @@ IMPORT
   VDefaultIO,
   OsEnv, OsExec,
   Charz,
-  Utf8, Windows1251 := OldCharsetWindows1251,
+  Utf8,
   Platform;
 
 CONST
   Version* = "0.4";
+
+  SkipEmbeddedView*  = { Odc.SkipEmbeddedView };
+  SkipOberonComment* = { Odc.SkipOberonComment };
+  InputWindows1251*  = { Odc.InputWindows1251 };
+  LastCharNewLine*   = { Odc.LastCharNewLine };
+  WriteDescriptors*  = { Odc.WriteDescriptors };
 
   McConfig = ".config/mc/mc.ext.ini";
   McConfigBackup = ".config/mc/mc.ext.ini~";
@@ -252,6 +258,31 @@ BEGIN
   ASSERT(set - {0 .. Odc.LastOption} = {});
   options.set := set
 END opt;
+
+PROCEDURE skipEmbeddedView*;
+BEGIN
+  options.set := options.set + SkipEmbeddedView
+END skipEmbeddedView;
+
+PROCEDURE skipOberonComment*;
+BEGIN
+  options.set := options.set + SkipOberonComment
+END skipOberonComment;
+
+PROCEDURE inputWindows1251*;
+BEGIN
+  options.set := options.set + InputWindows1251
+END inputWindows1251;
+
+PROCEDURE lastCharNewLine*;
+BEGIN
+  options.set := options.set + LastCharNewLine
+END lastCharNewLine;
+
+PROCEDURE writeDescriptors*;
+BEGIN
+  options.set := options.set + WriteDescriptors
+END writeDescriptors;
 
 PROCEDURE tab*(str: ARRAY OF CHAR);
 BEGIN
